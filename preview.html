@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Claude Terminal Dashboard — UX Preview</title>
+  <style>
+    /* Simulate VS Code dark theme variables */
+    :root {
+      --vscode-font-family: 'Segoe UI', system-ui, sans-serif;
+      --vscode-font-size: 13px;
+      --vscode-foreground: #cdd6f4;
+      --vscode-descriptionForeground: #6c7086;
+      --vscode-editor-background: #1e1e2e;
+      --vscode-panel-border: #45475a;
+      --vscode-list-hoverBackground: #313244;
+      --vscode-list-activeSelectionBackground: #45475a;
+      --vscode-focusBorder: #89b4fa;
+      --vscode-terminal-ansiGreen: #a6e3a1;
+      --vscode-terminal-ansiYellow: #f9e2af;
+      --vscode-terminal-ansiCyan: #94e2d5;
+      --vscode-sideBar-background: #181825;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #11111b;
+      color: #cdd6f4;
+      font-family: var(--vscode-font-family);
+      display: flex;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .preview-layout {
+      display: flex;
+      gap: 60px;
+      max-width: 1000px;
+    }
+
+    /* Simulated sidebar */
+    .sidebar-frame {
+      width: 280px;
+      min-width: 280px;
+      background: var(--vscode-sideBar-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .sidebar-header {
+      padding: 10px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground);
+      border-bottom: 1px solid var(--vscode-panel-border);
+    }
+
+    .sidebar-content {
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    /* Tile styles (mirrors webview.css) */
+    .tile {
+      background: var(--vscode-editor-background);
+      border: 1px solid var(--vscode-panel-border);
+      border-left: 3px solid var(--tile-color, var(--vscode-panel-border));
+      border-radius: 4px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .tile:hover { background: var(--vscode-list-hoverBackground); }
+    .tile.active { background: var(--vscode-list-activeSelectionBackground); }
+
+    .tile-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .tile-name {
+      font-weight: 500;
+      font-size: 13px;
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .tile-time {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      white-space: nowrap;
+    }
+    .tile-status {
+      font-size: 11px;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 3px;
+      padding-left: 18px;
+    }
+
+    /* Status dot */
+    .dot {
+      width: 8px;
+      height: 8px;
+      min-width: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .dot.idle { background: transparent; }
+    .dot.working {
+      background: var(--vscode-terminal-ansiGreen);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .dot.waiting {
+      background: var(--vscode-terminal-ansiYellow);
+      animation: blink 1s step-end infinite;
+    }
+    .dot.done {
+      background: var(--vscode-terminal-ansiCyan);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.15; }
+    }
+
+    /* Legend */
+    .legend {
+      flex: 1;
+    }
+    .legend h2 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #cdd6f4;
+    }
+    .legend-section {
+      margin-bottom: 24px;
+    }
+    .legend-section h3 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground);
+      margin-bottom: 10px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 13px;
+    }
+    .color-swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      min-width: 10px;
+      border-radius: 50%;
+    }
+    .legend-dot.working {
+      background: var(--vscode-terminal-ansiGreen);
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .legend-dot.waiting {
+      background: var(--vscode-terminal-ansiYellow);
+      animation: blink 1s step-end infinite;
+    }
+    .legend-dot.done {
+      background: var(--vscode-terminal-ansiCyan);
+    }
+    .legend-dot.idle {
+      background: transparent;
+      border: 1px solid var(--vscode-descriptionForeground);
+    }
+    .note {
+      font-size: 12px;
+      color: var(--vscode-descriptionForeground);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+<div class="preview-layout">
+
+  <!-- Simulated sidebar -->
+  <div class="sidebar-frame">
+    <div class="sidebar-header">Terminals</div>
+    <div class="sidebar-content">
+
+      <!-- Waiting tile (sorted first) -->
+      <div class="tile" style="--tile-color: #4ec9b0">
+        <div class="tile-header">
+          <span class="dot waiting"></span>
+          <span class="tile-name">life-planner</span>
+          <span class="tile-time">2m</span>
+        </div>
+        <div class="tile-status">Waiting for input</div>
+      </div>
+
+      <!-- Working tile -->
+      <div class="tile active" style="--tile-color: #dcdcaa">
+        <div class="tile-header">
+          <span class="dot working"></span>
+          <span class="tile-name">api</span>
+          <span class="tile-time">now</span>
+        </div>
+        <div class="tile-status">Working</div>
+      </div>
+
+      <!-- Working tile -->
+      <div class="tile" style="--tile-color: #c586c0">
+        <div class="tile-header">
+          <span class="dot working"></span>
+          <span class="tile-name">web-design-pipeline</span>
+          <span class="tile-time">12s</span>
+        </div>
+        <div class="tile-status">Working</div>
+      </div>
+
+      <!-- Done tile -->
+      <div class="tile" style="--tile-color: #6a9955">
+        <div class="tile-header">
+          <span class="dot done"></span>
+          <span class="tile-name">ha-tools</span>
+          <span class="tile-time">28s</span>
+        </div>
+        <div class="tile-status">Done</div>
+      </div>
+
+      <!-- Idle tiles -->
+      <div class="tile" style="--tile-color: #569cd6">
+        <div class="tile-header">
+          <span class="dot idle"></span>
+          <span class="tile-name">obsidian-vault</span>
+        </div>
+        <div class="tile-status">Idle</div>
+      </div>
+
+      <div class="tile" style="--tile-color: #4ec9b0">
+        <div class="tile-header">
+          <span class="dot idle"></span>
+          <span class="tile-name">travel-planner</span>
+        </div>
+        <div class="tile-status">Idle</div>
+      </div>
+
+      <div class="tile" style="--tile-color: #d4d4d4">
+        <div class="tile-header">
+          <span class="dot idle"></span>
+          <span class="tile-name">workspace</span>
+        </div>
+        <div class="tile-status">Idle</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Legend -->
+  <div class="legend">
+    <h2>Claude Terminal Dashboard — UX Preview</h2>
+
+    <div class="legend-section">
+      <h3>Status indicators</h3>
+      <div class="legend-item"><span class="legend-dot waiting"></span> Waiting — amber blink (needs user input)</div>
+      <div class="legend-item"><span class="legend-dot working"></span> Working — green pulse (Claude is active)</div>
+      <div class="legend-item"><span class="legend-dot done"></span> Done — cyan static (fades to idle after 30s)</div>
+      <div class="legend-item"><span class="legend-dot idle"></span> Idle — no dot (terminal open, no activity)</div>
+    </div>
+
+    <div class="legend-section">
+      <h3>Theme colors (left border)</h3>
+      <div class="legend-item"><span class="color-swatch" style="background:#4ec9b0"></span> Cyan — Life &amp; finance</div>
+      <div class="legend-item"><span class="color-swatch" style="background:#6a9955"></span> Green — Home &amp; IoT</div>
+      <div class="legend-item"><span class="color-swatch" style="background:#569cd6"></span> Blue — Knowledge &amp; research</div>
+      <div class="legend-item"><span class="color-swatch" style="background:#c586c0"></span> Magenta — Web &amp; design</div>
+      <div class="legend-item"><span class="color-swatch" style="background:#dcdcaa"></span> Yellow — Dev infrastructure</div>
+      <div class="legend-item"><span class="color-swatch" style="background:#d4d4d4"></span> White — Root workspace</div>
+    </div>
+
+    <div class="legend-section">
+      <h3>Interactions</h3>
+      <div class="note">
+        Click tile → switches to that terminal<br>
+        Active terminal gets highlighted background (see "api" tile)<br>
+        Arrow keys / j/k → navigate tiles, Enter → switch<br>
+        Sort order: waiting → working → done → idle, then by recency
+      </div>
+    </div>
+
+    <div class="legend-section">
+      <h3>Review questions</h3>
+      <div class="note">
+        1. Are the tile proportions / padding right for your sidebar width?<br>
+        2. Do the status dot animations read well? (pulse vs blink distinction)<br>
+        3. Should "Idle" tiles show a status line at all, or just the name?<br>
+        4. Is the left border thick enough to read the color at a glance?<br>
+        5. Any projects missing from the theme color map?
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

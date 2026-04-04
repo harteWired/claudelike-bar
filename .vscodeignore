@@ -1,0 +1,5 @@
+src/**
+tsconfig.json
+PLAN.md
+node_modules/**
+.gitignore

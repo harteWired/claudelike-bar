@@ -1,0 +1,137 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: transparent;
+  padding: 8px;
+}
+
+#tiles-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Empty state */
+.empty-state {
+  color: var(--vscode-descriptionForeground);
+  text-align: center;
+  padding: 24px 12px;
+  font-size: 12px;
+}
+
+/* Tile */
+.tile {
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-left: 3px solid var(--tile-color, var(--vscode-panel-border));
+  border-radius: 4px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.3s ease, transform 0.2s ease;
+  outline: none;
+}
+
+.tile:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.tile:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: -1px;
+}
+
+.tile.active {
+  background: var(--vscode-list-activeSelectionBackground);
+}
+
+/* Tile entering animation */
+.tile.entering {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.tile.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Tile top row: dot + name + time */
+.tile-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tile-name {
+  font-weight: 500;
+  font-size: 13px;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tile-time {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+
+/* Tile bottom row: status text */
+.tile-status {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  margin-top: 3px;
+  padding-left: 18px; /* align with text after dot */
+}
+
+/* Status dot */
+.dot {
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.dot.idle {
+  background: transparent;
+}
+
+.dot.working {
+  background: var(--vscode-terminal-ansiGreen);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.dot.waiting {
+  background: var(--vscode-terminal-ansiYellow);
+  animation: blink 1s step-end infinite;
+}
+
+.dot.done {
+  background: var(--vscode-terminal-ansiCyan);
+  animation: fade-out 30s ease-out forwards;
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+@keyframes fade-out {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0.2; }
+}

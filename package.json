@@ -1,0 +1,38 @@
+{
+  "name": "claude-terminal-dashboard",
+  "displayName": "Claude Terminal Dashboard",
+  "description": "Sidebar dashboard with live status tiles for Claude Code terminal sessions",
+  "version": "0.1.0",
+  "publisher": "aes87",
+  "engines": { "vscode": "^1.93.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [{
+        "id": "claude-dashboard",
+        "title": "Claude Dashboard",
+        "icon": "media/dashboard.svg"
+      }]
+    },
+    "views": {
+      "claude-dashboard": [{
+        "type": "webview",
+        "id": "claudeDashboard.mainView",
+        "name": "Terminals"
+      }]
+    }
+  },
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --format=cjs",
+    "watch": "npm run build -- --watch",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.93.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.4.0",
+    "@vscode/vsce": "^2.24.0"
+  }
+}

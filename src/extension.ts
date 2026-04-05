@@ -2,9 +2,11 @@ import * as vscode from 'vscode';
 import { DashboardProvider } from './dashboardProvider';
 import { TerminalTracker } from './terminalTracker';
 import { StatusWatcher } from './statusWatcher';
+import { ConfigManager } from './configManager';
 
 export function activate(context: vscode.ExtensionContext) {
-  const tracker = new TerminalTracker();
+  const configManager = new ConfigManager();
+  const tracker = new TerminalTracker(configManager);
   const watcher = new StatusWatcher();
   const provider = new DashboardProvider(context.extensionUri);
 
@@ -42,7 +44,7 @@ export function activate(context: vscode.ExtensionContext) {
         break;
 
       case 'setColor':
-        tracker.setColorOverride(message.id, message.color ?? undefined);
+        tracker.setColor(message.id, message.color ?? undefined);
         break;
     }
   };
@@ -61,10 +63,21 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
+  // Refresh tiles when config file changes (color/nickname edits)
+  const configSub = configManager.onChange(tracker.refreshFromConfig.bind(tracker));
+
+  // Auto-start terminals marked in config
+  const autoStartNames = configManager.getAutoStartTerminals();
+  for (const name of autoStartNames) {
+    if (!tracker.getTerminalByName(name)) {
+      vscode.window.createTerminal({ name });
+    }
+  }
+
   // Periodic refresh for relative time display (every 30s)
   const interval = setInterval(refreshTiles, 30_000);
 
-  context.subscriptions.push(registration, tracker, watcher, {
+  context.subscriptions.push(registration, tracker, watcher, configManager, configSub, {
     dispose: () => clearInterval(interval),
   });
 }

@@ -362,14 +362,56 @@ Could be made dynamic later by reading devcontainer.json or a config file.
 - [x] **Kill terminal** — close/dispose the terminal
 - [x] **Set color manually** — override the theme-group color for this specific tile (7-color swatch picker + reset to default)
 
-### Settings Panel (Title Bar Gear Icon)
+### Config File (replaces GUI settings panel)
 
-Add a gear icon to the sidebar title bar that opens a settings webview. Features:
+No settings webview, no gear icon, no drag-and-drop. All configuration lives in a single JSON file that the extension reads and that Claude Code (or the user) can edit directly. The file is human-readable and self-documenting — designed to be natively comprehensible to Claude Code so any agent session can update colors, nicknames, or auto-start flags with a simple file edit.
 
-- [ ] **Per-terminal color assignment** — change which color is assigned to each terminal individually
-- [ ] **Group-based color assignment** — define named groups (e.g. "Life & Finance", "Home & IoT") and assign a color to the whole group
-- [ ] **Drag-and-drop interface** — drag terminals between groups; drag colors from a palette onto groups/terminals
-- [ ] **Color palette picker** — visual palette to pick from and drop onto targets
-- [ ] **Terminal nicknames** — give each terminal a display name that overrides the profile name on the tile
-- [ ] **Auto-start toggle** — checkbox per terminal: whether it should auto-launch when VS Code starts
-- [ ] **Persist all settings** between sessions (use VS Code `globalState` or a JSON config file that survives container rebuilds — bind-mounted or in workspace)
+#### File location
+
+`/workspace/.claudelike-bar.json` — lives in the workspace root so it survives container rebuilds and is committed alongside the project.
+
+#### Auto-population
+
+When a terminal opens that isn't already in the config file, the extension **automatically appends an entry** with sensible defaults (color from the existing theme map, nickname = terminal name, autoStart = false). The user never has to manually create entries — the config file grows organically as terminals are used.
+
+#### Schema
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Claudelike Bar configuration. Each key is a terminal profile name. Edit colors, nicknames, and auto-start directly — no GUI needed.",
+  "terminals": {
+    "life-planner": {
+      "color": "cyan",
+      "nickname": null,
+      "autoStart": false
+    },
+    "api": {
+      "color": "yellow",
+      "nickname": "backend",
+      "autoStart": true
+    },
+    "ha-tools": {
+      "color": "green",
+      "nickname": null,
+      "autoStart": false
+    }
+  }
+}
+```
+
+#### Fields per terminal
+
+| Field | Type | Default | Purpose |
+|-------|------|---------|---------|
+| `color` | string | From theme map | One of: `cyan`, `green`, `blue`, `magenta`, `yellow`, `white`, `red` |
+| `nickname` | string \| null | `null` (uses terminal name) | Display name shown on tile instead of profile name |
+| `autoStart` | boolean | `false` | Whether to launch this terminal automatically on VS Code startup |
+
+#### Design principles
+
+- **No groups** — colors are assigned per-terminal, not per-group. The old theme map provides initial defaults but terminals are individually configurable.
+- **Claude Code native** — plain JSON with obvious field names. Any Claude Code session can read the file, understand the schema, and edit it. No binary state, no VS Code globalState, no opaque storage.
+- **Auto-populating** — the config file is never stale. New terminals get entries automatically. Removed terminals can be cleaned up manually or left as-is (ignored if no matching terminal exists).
+- **Workspace-committed** — the file lives in `/workspace/` so it persists across container rebuilds and can be version-controlled.
+- **Extension watches the file** — changes take effect immediately via FileSystemWatcher (same pattern as the dashboard JSON). No reload required.

@@ -8,7 +8,7 @@ This fixes that.
 
 <div align="center">
 
-### [🔴 LIVE PREVIEW — See it in action →](https://aes87.github.io/claudelike-bar/)
+### [LIVE PREVIEW — See it in action →](https://aes87.github.io/claudelike-bar/)
 
 *Interactive demo with animated status dots, theme colors, and all five states*
 
@@ -28,10 +28,12 @@ A VS Code sidebar that shows you — at a glance — what every Claude Code term
 - **Auto-sorted** — "waiting for input" floats to top, because that's the one you keep ignoring
 - **Sticky waiting** — stays "waiting" until you actually look at it. If you look at a different terminal instead, it gets passive-aggressive
 - **Context window %** — each tile shows how full the session's context is, color-coded so you know when to panic
-- **Color-coded borders** — matched to your terminal tab colors by project domain. Thick enough to see without squinting
+- **Color-coded borders** — per-terminal colors via config file. Thick enough to see without squinting
+- **Nicknames** — give terminals display names that make sense to you
+- **Auto-start** — mark terminals to launch automatically when VS Code opens
+- **Config file** — plain JSON, auto-populated, Claude Code can read and edit it natively
 - **Keyboard nav** — arrow keys / j/k, Enter to switch. For the mouse-averse
 - **DOM diffing** — no flicker, no missed clicks, no full redraws. Patches only what changed
-- **14 KB packaged** — still smaller than most READMEs
 
 ## How It Works
 
@@ -55,25 +57,13 @@ Five statuses:
 
 The "ignored" state rotates through helpful messages like "Patiently judging you" and "I'll just wait here then." You earned them.
 
-## Theme Colors
-
-Tile borders match your VS Code terminal ANSI colors by project category:
-
-| Category | Color | You Know the Type |
-|----------|-------|-------------------|
-| Life & finance | Cyan | The ones that make you feel responsible |
-| Home & IoT | Green | The ones that control physical objects |
-| Knowledge | Blue | The ones you open to "organize later" |
-| Web & design | Magenta | The pretty ones |
-| Dev infra | Yellow | The ones that make the other ones work |
-
 ## Install
 
 ```bash
 git clone https://github.com/aes87/claudelike-bar.git
 cd claudelike-bar
-npm install && npm run build
-npx vsce package --allow-missing-repository
+npm install
+npm run package
 code --install-extension claudelike-bar-*.vsix --force
 ```
 
@@ -81,38 +71,20 @@ Then reload VS Code. New icon appears in the activity bar. Click it. Marvel.
 
 ## Hook Setup
 
-The extension reads status from hook-written JSON files. You need two things:
+The extension reads status from hook-written JSON files. A ready-to-use hook script is included in the repo at `hooks/dashboard-status.sh`.
 
-### 1. Hook Script
-
-Save as `~/.claude/hooks/dashboard-status.sh`:
+### 1. Copy the hook script
 
 ```bash
-#!/bin/bash
-PROJECT=$(basename "$PWD")
-EVENT="$CLAUDE_HOOK_EVENT_NAME"
-INPUT=$(cat)
-
-STATUS="working"
-if [ "$EVENT" = "Stop" ]; then
-  STATUS="done"
-elif [ "$EVENT" = "Notification" ]; then
-  STATUS="waiting"
-elif [ "$EVENT" = "PreToolUse" ]; then
-  TOOL=$(echo "$INPUT" | jq -r '.tool_name // ""')
-  if [ "$TOOL" = "AskUserQuestion" ] || [ "$TOOL" = "ExitPlanMode" ]; then
-    STATUS="waiting"
-  fi
-fi
-
-mkdir -p /tmp/claude-dashboard
-echo "{\"project\":\"$PROJECT\",\"status\":\"$STATUS\",\"timestamp\":$(date +%s),\"event\":\"$EVENT\"}" \
-  > "/tmp/claude-dashboard/${PROJECT}.json"
+cp hooks/dashboard-status.sh ~/.claude/hooks/
+chmod +x ~/.claude/hooks/dashboard-status.sh
 ```
 
-### 2. Register Hooks
+Make sure `jq` is installed — the hook uses it to parse tool names.
 
-Add to your `~/.claude/settings.json`:
+### 2. Register hooks
+
+Merge the contents of `hooks/settings-snippet.json` into your `~/.claude/settings.json`. Or paste this under the `"hooks"` key:
 
 ```json
 {
@@ -125,7 +97,17 @@ Add to your `~/.claude/settings.json`:
 }
 ```
 
-### 3. Context % (Optional)
+### 3. Verify it works
+
+Open a Claude Code session, do something, then check:
+
+```bash
+cat /tmp/claude-dashboard/*.json
+```
+
+You should see JSON with `project`, `status`, `timestamp`, and `event` fields.
+
+### 4. Context % (Optional)
 
 Add this to your statusline script to feed context window usage into the tiles:
 
@@ -142,11 +124,41 @@ else
 fi
 ```
 
-See `PLAN.md` for the full architecture and design decisions.
+## Configuration
+
+All settings live in `.claudelike-bar.json` in your workspace root. **You don't need to create this file** — the extension auto-populates it as you open terminals.
+
+Example:
+
+```json
+{
+  "description": "Claudelike Bar configuration. Each key is a terminal name. Edit colors, nicknames, and auto-start directly.",
+  "terminals": {
+    "life-planner": {
+      "color": "cyan",
+      "nickname": null,
+      "autoStart": false
+    },
+    "api": {
+      "color": "yellow",
+      "nickname": "backend",
+      "autoStart": true
+    }
+  }
+}
+```
+
+| Field | Type | Default | What It Does |
+|-------|------|---------|--------------|
+| `color` | string | `white` | Tile border color: `cyan`, `green`, `blue`, `magenta`, `yellow`, `white`, `red` |
+| `nickname` | string or null | `null` | Display name shown on the tile instead of the terminal name |
+| `autoStart` | boolean | `false` | Launch this terminal automatically when VS Code starts |
+
+Edit the file directly — changes take effect immediately. Claude Code can read and modify this file natively, so you can ask it to change colors or nicknames for you.
 
 ## Requirements
 
-- VS Code ≥ 1.93
+- VS Code >= 1.93
 - Claude Code with hooks configured
 - `jq` installed
 - The emotional maturity to stop ignoring amber dots

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Claudelike Bar — v0.3 UX Preview</title>
+  <title>Claudelike Bar — v0.4 UX Preview</title>
   <style>
     :root {
       --vscode-font-family: 'Segoe UI', system-ui, sans-serif;
@@ -102,6 +102,11 @@
     .legend-dot.idle { background: transparent; border: 1px solid var(--vscode-descriptionForeground); }
     .note { font-size: 12px; color: var(--vscode-descriptionForeground); margin-top: 8px; line-height: 1.5; }
     .new-badge { display: inline-block; font-size: 9px; font-weight: 700; background: var(--vscode-terminal-ansiGreen); color: #1e1e2e; padding: 1px 5px; border-radius: 3px; margin-left: 6px; vertical-align: middle; }
+    .config-block { background: var(--vscode-editor-background); border: 1px solid var(--vscode-panel-border); border-radius: 4px; padding: 12px 14px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px; line-height: 1.6; white-space: pre; overflow-x: auto; margin-top: 10px; }
+    .config-key { color: var(--vscode-terminal-ansiCyan); }
+    .config-str { color: var(--vscode-terminal-ansiGreen); }
+    .config-null { color: var(--vscode-terminal-ansiMagenta); }
+    .config-bool { color: var(--vscode-terminal-ansiYellow); }
   </style>
 </head>
 <body>
@@ -124,7 +129,7 @@
       <div class="tile" style="--tile-color: var(--vscode-terminal-ansiYellow)">
         <div class="tile-header">
           <span class="dot waiting"></span>
-          <span class="tile-name">api</span>
+          <span class="tile-name">backend</span>
           <span class="tile-time">12s</span>
           <span class="tile-ctx ctx-ok">ctx 22%</span>
         </div>
@@ -141,7 +146,7 @@
         <div class="tile-status">Working</div>
       </div>
 
-      <div class="tile" style="--tile-color: var(--vscode-terminal-ansiGreen)">
+      <div class="tile" style="--tile-color: var(--vscode-terminal-ansiRed)">
         <div class="tile-header">
           <span class="dot done"></span>
           <span class="tile-name">ha-tools</span>
@@ -180,7 +185,7 @@
   </div>
 
   <div class="legend">
-    <h2>claudelike-bar v0.3 — UX Preview</h2>
+    <h2>claudelike-bar v0.4 — UX Preview</h2>
 
     <div class="legend-section">
       <h3>Status indicators</h3>
@@ -192,31 +197,47 @@
     </div>
 
     <div class="legend-section">
-      <h3>Theme colors (left border — now 5px) <span class="new-badge">NEW</span></h3>
-      <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiCyan)"></span> Cyan — Life &amp; finance (matches terminal tab)</div>
+      <h3>Config file <span class="new-badge">NEW in v0.4</span></h3>
+      <div class="note">All settings in <code>.claudelike-bar.json</code> — auto-populated as you open terminals. Claude Code can read and edit it natively.</div>
+      <div class="config-block"><span class="config-key">"api"</span>: {
+  <span class="config-key">"color"</span>: <span class="config-str">"yellow"</span>,
+  <span class="config-key">"nickname"</span>: <span class="config-str">"backend"</span>,
+  <span class="config-key">"autoStart"</span>: <span class="config-bool">true</span>
+}</div>
+      <div class="note" style="margin-top:10px">
+        <strong>color</strong> — per-terminal, persisted to file (cyan, green, blue, magenta, yellow, white, red)<br>
+        <strong>nickname</strong> — display name on the tile (notice "backend" above instead of "api")<br>
+        <strong>autoStart</strong> — launch terminal automatically when VS Code opens
+      </div>
+    </div>
+
+    <div class="legend-section">
+      <h3>Theme colors (left border)</h3>
+      <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiCyan)"></span> Cyan — Life &amp; finance</div>
       <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiGreen)"></span> Green — Home &amp; IoT</div>
       <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiBrightBlue)"></span> Blue — Knowledge &amp; research</div>
       <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiMagenta)"></span> Magenta — Web &amp; design</div>
       <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiYellow)"></span> Yellow — Dev infrastructure</div>
-      <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiBrightWhite)"></span> White — Root workspace</div>
+      <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiRed)"></span> Red — Custom override</div>
+      <div class="legend-item"><span class="color-swatch" style="background:var(--vscode-terminal-ansiBrightWhite)"></span> White — Default / root</div>
     </div>
 
     <div class="legend-section">
-      <h3>Context window badge <span class="new-badge">NEW</span></h3>
+      <h3>Context window badge</h3>
       <div class="legend-item"><span class="tile-ctx ctx-ok" style="font-size:13px">ctx 22%</span> Blue — under 60%</div>
       <div class="legend-item"><span class="tile-ctx ctx-warn" style="font-size:13px">ctx 63%</span> Amber — 60-79%</div>
       <div class="legend-item"><span class="tile-ctx ctx-crit" style="font-size:13px">ctx 84%</span> Red — 80%+</div>
-      <div class="note">Fed from statusline data (updates every few seconds). Same thresholds as your statusline bar.</div>
     </div>
 
     <div class="legend-section">
-      <h3>v0.3 changes</h3>
+      <h3>v0.4 changes</h3>
       <div class="note">
-        1. <strong>Renamed</strong> — "Claude Terminal Dashboard" → "Claudelike Bar"<br>
-        2. <strong>Terminal tracking fix</strong> — stable IDs, no ghost tiles after close/reopen<br>
-        3. <strong>Live name refresh</strong> — picks up profile names even if set after open<br>
-        4. <strong>Done vs ignored</strong> — distinct border styles for clearer visual separation<br>
-        5. <strong>Right-click menu</strong> — clone, kill, or set color on any tile
+        1. <strong>Config file</strong> — <code>.claudelike-bar.json</code> replaces GUI settings. Auto-populates, Claude Code native<br>
+        2. <strong>Nicknames</strong> — display names on tiles (e.g. "api" shows as "backend")<br>
+        3. <strong>Auto-start</strong> — terminals can launch automatically on VS Code open<br>
+        4. <strong>Colors persisted</strong> — context-menu color changes saved to config file, survive restarts<br>
+        5. <strong>Bundled hooks</strong> — ready-to-use hook script + settings snippet in <code>hooks/</code><br>
+        6. <strong>Standalone install</strong> — no dependencies on author's environment
       </div>
     </div>
   </div>

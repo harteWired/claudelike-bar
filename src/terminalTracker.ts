@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { TileData, SessionStatus, getThemeColor } from './types';
+import { ConfigManager } from './configManager';
 
 const IGNORED_TEXTS = [
   'Being ignored :(',
@@ -24,8 +25,10 @@ export class TerminalTracker implements vscode.Disposable {
   readonly onChange = this.onChangeEmitter.event;
   private nameRefreshTimer: ReturnType<typeof setInterval> | undefined;
   private nameRefreshIdleCycles = 0;
+  private configManager: ConfigManager;
 
-  constructor() {
+  constructor(configManager: ConfigManager) {
+    this.configManager = configManager;
     // Track existing terminals
     for (const terminal of vscode.window.terminals) {
       this.addTerminal(terminal);
@@ -56,15 +59,20 @@ export class TerminalTracker implements vscode.Disposable {
     const name = terminal.name;
     if (name === 'bash' || name === 'zsh' || name === 'sh') return;
 
+    // Auto-populate config file entry
+    this.configManager.ensureEntry(name);
+    const cfg = this.configManager.getTerminal(name);
+
     const id = this.assignId(terminal);
     this.terminalRefs.set(id, terminal);
     this.terminals.set(id, {
       id,
       name,
+      displayName: cfg?.nickname || name,
       status: 'idle',
       lastActivity: Date.now(),
       isActive: vscode.window.activeTerminal === terminal,
-      themeColor: getThemeColor(name),
+      themeColor: getThemeColor(name, cfg?.color),
     });
   }
 
@@ -141,8 +149,11 @@ export class TerminalTracker implements vscode.Disposable {
             this.terminals.delete(id);
             this.terminalRefs.delete(id);
           } else {
+            this.configManager.ensureEntry(name);
+            const cfg = this.configManager.getTerminal(name);
             tile.name = name;
-            tile.themeColor = getThemeColor(name, tile.colorOverride);
+            tile.displayName = cfg?.nickname || name;
+            tile.themeColor = getThemeColor(name, cfg?.color);
           }
           changed = true;
         }
@@ -162,6 +173,16 @@ export class TerminalTracker implements vscode.Disposable {
         this.stopNameRefresh();
       }
     }
+  }
+
+  /** Re-apply config (colors, nicknames) to all tracked tiles. */
+  refreshFromConfig(): void {
+    for (const [, tile] of this.terminals) {
+      const cfg = this.configManager.getTerminal(tile.name);
+      tile.displayName = cfg?.nickname || tile.name;
+      tile.themeColor = getThemeColor(tile.name, cfg?.color);
+    }
+    this.onChangeEmitter.fire();
   }
 
   updateStatus(projectName: string, status: SessionStatus, event?: string, contextPercent?: number): void {
@@ -189,11 +210,13 @@ export class TerminalTracker implements vscode.Disposable {
     this.onChangeEmitter.fire();
   }
 
-  setColorOverride(id: number, color: string | undefined): void {
+  setColor(id: number, color: string | undefined): void {
     const tile = this.terminals.get(id);
     if (!tile) return;
-    tile.colorOverride = color;
-    tile.themeColor = getThemeColor(tile.name, color);
+    // Persist to config file — single source of truth
+    this.configManager.setColor(tile.name, color as any);
+    const cfg = this.configManager.getTerminal(tile.name);
+    tile.themeColor = getThemeColor(tile.name, cfg?.color);
     this.onChangeEmitter.fire();
   }
 

@@ -117,10 +117,11 @@ function patchTile(el, tile) {
   // Theme color
   el.style.setProperty('--tile-color', tile.themeColor);
 
-  // Name (may change via refreshNames)
+  // Display name (nickname from config, or terminal name)
   const nameEl = el.querySelector('.tile-name');
-  if (nameEl && nameEl.textContent !== tile.name) {
-    nameEl.textContent = tile.name;
+  const displayName = tile.displayName || tile.name;
+  if (nameEl && nameEl.textContent !== displayName) {
+    nameEl.textContent = displayName;
   }
 
   // Status dot
@@ -172,10 +173,11 @@ function patchTile(el, tile) {
   }
 
   // Aria
+  const ariaDisplayName = tile.displayName || tile.name;
   const label = tile.status === 'ignored'
     ? tile.ignoredText || 'Being ignored'
     : (STATUS_LABELS[tile.status] || tile.status);
-  el.setAttribute('aria-label', `${tile.name} — ${label}`);
+  el.setAttribute('aria-label', `${ariaDisplayName} — ${label}`);
 }
 
 /**
@@ -189,6 +191,7 @@ function createTileEl(tile, index) {
   el.dataset.id = String(tile.id);
   el.setAttribute('role', 'button');
 
+  const displayName = tile.displayName || tile.name;
   const timeStr = formatRelativeTime(tile.lastActivity);
   const statusLabel = tile.status === 'ignored'
     ? (tile.ignoredText || 'Being ignored :(')
@@ -204,14 +207,14 @@ function createTileEl(tile, index) {
   el.innerHTML = `
     <div class="tile-header">
       <span class="dot ${dotClass}"></span>
-      <span class="tile-name">${escapeHtml(tile.name)}</span>
+      <span class="tile-name">${escapeHtml(displayName)}</span>
       ${tile.status !== 'idle' ? `<span class="tile-time">${timeStr}</span>` : '<span class="tile-time"></span>'}
       ${ctxHtml}
     </div>
     <div class="tile-status${tile.status === 'ignored' ? ' status-ignored' : ''}">${statusLabel}</div>
   `;
 
-  el.setAttribute('aria-label', `${tile.name} — ${statusLabel}`);
+  el.setAttribute('aria-label', `${displayName} — ${statusLabel}`);
 
   el.addEventListener('click', () => {
     vscode.postMessage({ type: 'switchTerminal', id: tile.id });

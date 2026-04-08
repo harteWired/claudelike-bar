@@ -32,15 +32,9 @@ That's it. No `jq`, no special tools.
 
 ### Point Claude at it
 
-If you have Claude Code, just clone the repo and tell Claude to set it up:
+> *"Install this extension: https://github.com/aes87/claudelike-bar"*
 
-```bash
-git clone https://github.com/aes87/claudelike-bar.git
-cd claudelike-bar
-claude
-```
-
-Then say *"install this extension"*. Claude reads the repo's `CLAUDE.md`, runs `setup.sh`, and you're done. Reload VS Code.
+That's it. Claude clones the repo, reads the setup instructions, and handles everything. Reload VS Code when it's done.
 
 ### One-command setup
 

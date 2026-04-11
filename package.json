@@ -2,7 +2,7 @@
   "name": "claudelike-bar",
   "displayName": "Claudelike Bar",
   "description": "Sidebar dashboard with live status tiles for Claude Code terminal sessions",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "publisher": "aes87",
   "engines": {
     "vscode": "^1.93.0"

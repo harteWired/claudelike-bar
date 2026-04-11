@@ -97,7 +97,7 @@ Claude will read `.claudelike-bar.jsonc`, ask what projects you care about, set 
 - **Click to switch** — stops the raccoon behavior
 - **Sort modes** — `auto` (status-based: waiting floats to top) or `manual` (drag to arrange)
 - **Drag and drop reordering** — grab any tile, drop it where you want; order persists
-- **Mark as done** — right-click → "Mark as done" to silence judgement on tiles you've consciously parked
+- **Mark as done** — right-click → "Mark as done" parks a session: sinks to bottom of auto-sort, goes quiet, ignores background hook events. Un-parks only when you submit a new prompt in that terminal.
 - **Two personality modes** — chill (quiet) or passive-aggressive (guilt trips)
 - **Context window %** — each tile shows how full the session's context is
 - **Color-coded borders** — per-terminal theme colors

@@ -9,6 +9,8 @@ export interface TerminalConfig {
   icon: string | null;
   nickname: string | null;
   autoStart: boolean;
+  command?: string | null;
+  order?: number;
 }
 
 export interface ContextThresholds {
@@ -16,10 +18,15 @@ export interface ContextThresholds {
   crit: number;
 }
 
+export type SortMode = 'auto' | 'manual';
+
 export interface ConfigFile {
   $schema?: string;
   description?: string;
   mode?: 'chill' | 'passive-aggressive';
+  sortMode?: SortMode;
+  claudeCommand?: string | null;
+  debug?: boolean;
   labels?: Partial<Record<string, string>>;
   contextThresholds?: Partial<ContextThresholds>;
   ignoredTexts?: string[];
@@ -163,6 +170,28 @@ export class ConfigManager implements vscode.Disposable {
     };
   }
 
+  /** Whether debug logging is enabled. */
+  isDebugEnabled(): boolean {
+    return this.config.debug === true;
+  }
+
+  /**
+   * Get the command to run in an auto-started terminal.
+   * Per-terminal `command` overrides the global `claudeCommand`.
+   * Null/empty means don't run anything.
+   */
+  getAutoStartCommand(terminalName?: string): string | null {
+    if (terminalName) {
+      const override = this.config.terminals[terminalName]?.command;
+      if (override !== undefined) {
+        return override === null || override === '' ? null : override;
+      }
+    }
+    const cmd = this.config.claudeCommand;
+    if (cmd == null || cmd === '') return null;
+    return cmd;
+  }
+
   /** Get config for a terminal, or undefined if not in the file. */
   getTerminal(name: string): TerminalConfig | undefined {
     return this.config.terminals[name];
@@ -205,6 +234,39 @@ export class ConfigManager implements vscode.Disposable {
     this.scheduleSave();
   }
 
+  /**
+   * Assign sequential `order` values to terminals by name. Names not in the
+   * list are left with whatever order they already had. Used by drag-and-drop
+   * reordering in the webview.
+   */
+  setOrder(orderedNames: string[]): void {
+    orderedNames.forEach((name, index) => {
+      const entry = this.config.terminals[name];
+      if (entry) entry.order = index;
+    });
+    this.scheduleSave();
+  }
+
+  /** True if any terminal has an explicit `order` set. */
+  hasExplicitOrder(): boolean {
+    for (const cfg of Object.values(this.config.terminals)) {
+      if (typeof cfg.order === 'number') return true;
+    }
+    return false;
+  }
+
+  /** Resolve the sort mode. Defaults to 'auto' when unset. */
+  getSortMode(): SortMode {
+    return this.config.sortMode === 'manual' ? 'manual' : 'auto';
+  }
+
+  /** Force the sort mode (used when the user drags a tile). */
+  setSortMode(mode: SortMode): void {
+    if (this.config.sortMode === mode) return;
+    this.config.sortMode = mode;
+    this.scheduleSave();
+  }
+
   private scheduleSave(): void {
     // Debounce writes so rapid terminal opens don't thrash the file
     if (this.writeDebounce) clearTimeout(this.writeDebounce);
@@ -232,6 +294,9 @@ export class ConfigManager implements vscode.Disposable {
    */
   private generateConfigText(): string {
     const mode = this.getMode();
+    const sortMode = this.getSortMode();
+    const claudeCommand = this.config.claudeCommand ?? null;
+    const debug = this.config.debug === true;
     const labels = { ...DEFAULT_LABELS, ...this.config.labels };
     const thresholds = this.getContextThresholds();
     const ignoredTexts = this.getIgnoredTexts();
@@ -255,6 +320,22 @@ export class ConfigManager implements vscode.Disposable {
       '  //   "chill"              \u2014 terminals quietly fade to "Done"',
       '  //   "passive-aggressive" \u2014 guilt-trips you with snarky messages',
       `  "mode": ${JSON.stringify(mode)},`,
+      '',
+      '  // How tiles are ordered in the sidebar:',
+      '  //   "auto"   — sort by status (waiting → ready → working → done → idle)',
+      '  //   "manual" — respect the drag-and-drop order from `terminals[].order`.',
+      '  // Dragging a tile automatically flips this to "manual".',
+      `  "sortMode": ${JSON.stringify(sortMode)},`,
+      '',
+      '  // Command to send to auto-started terminals after they open.',
+      '  // null / empty = just open the terminal, don\'t run anything.',
+      '  // Example: "claude --dangerously-skip-permissions"',
+      `  "claudeCommand": ${JSON.stringify(claudeCommand)},`,
+      '',
+      '  // Debug logging — when true, the extension logs to the "Claudelike Bar"',
+      '  // output channel AND the hook script writes /tmp/claude-dashboard/debug.log.',
+      '  // Use this to diagnose stuck tiles or missing status events.',
+      `  "debug": ${JSON.stringify(debug)},`,
       '',
       '  // \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510',
       '  // \u2502  FINE TUNING                                    \u2502',
@@ -282,6 +363,7 @@ export class ConfigManager implements vscode.Disposable {
       '  // icon:      any VS Code codicon (calendar, server, notebook, lock, etc.)',
       '  // nickname:  display name override (null = use terminal name)',
       '  // autoStart: true = open this terminal when VS Code starts',
+      '  // command:   override the global claudeCommand for this terminal (omit to inherit)',
       `  "terminals": ${indent(JSON.stringify(terminals, null, 4), 2)}`,
       '}',
       '',

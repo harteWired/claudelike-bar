@@ -13,6 +13,7 @@ export class TerminalTracker implements vscode.Disposable {
   private nameRefreshTimer: ReturnType<typeof setInterval> | undefined;
   private nameRefreshIdleCycles = 0;
   private configManager: ConfigManager;
+  private log: (msg: string) => void;
 
   // State machine timers: ready → waiting after 60s
   private readyTimers = new Map<number, NodeJS.Timeout>();
@@ -20,8 +21,9 @@ export class TerminalTracker implements vscode.Disposable {
   // Focus tracking: which tile was focused while in "waiting" state
   private focusedWaitingTile: number | null = null;
 
-  constructor(configManager: ConfigManager) {
+  constructor(configManager: ConfigManager, log?: (msg: string) => void) {
     this.configManager = configManager;
+    this.log = log ?? (() => {});
     // Track existing terminals
     for (const terminal of vscode.window.terminals) {
       this.addTerminal(terminal);
@@ -209,9 +211,12 @@ export class TerminalTracker implements vscode.Disposable {
   }
 
   updateStatus(projectName: string, status: SessionStatus, event?: string, contextPercent?: number): void {
+    let matched = false;
     for (const [, tile] of this.terminals) {
       if (tile.name !== projectName) continue;
+      matched = true;
 
+      const prev = tile.status;
       let changed = false;
 
       // UserPromptSubmit is the universal reset — always goes to working
@@ -248,11 +253,18 @@ export class TerminalTracker implements vscode.Disposable {
       if (changed) {
         tile.lastActivity = Date.now();
         tile.event = event;
+        this.log(`transition ${tile.name}: ${prev} → ${tile.status} (event=${event ?? '-'})`);
+      } else {
+        this.log(`no-op ${tile.name}: stayed ${prev} (event=${event ?? '-'}, incoming=${status})`);
       }
       if (contextPercent !== undefined) {
         tile.contextPercent = contextPercent;
       }
       break; // terminal names are unique
+    }
+    if (!matched) {
+      const names = Array.from(this.terminals.values()).map((t) => t.name).join(', ');
+      this.log(`unmatched status for "${projectName}" (tracked: [${names}])`);
     }
     this.onChangeEmitter.fire();
   }
@@ -283,6 +295,27 @@ export class TerminalTracker implements vscode.Disposable {
     }
   }
 
+  /**
+   * Manually mark a tile as "done" — silences passive-aggressive judgement
+   * when the user knows they're not actively using it. A subsequent
+   * UserPromptSubmit will reset it back to "working".
+   */
+  markDone(id: number): void {
+    const tile = this.terminals.get(id);
+    if (!tile) return;
+    const prev = tile.status;
+    tile.status = 'done';
+    tile.statusLabel = this.configManager.getLabel('done');
+    tile.ignoredText = undefined;
+    tile.lastActivity = Date.now();
+    this.clearReadyTimer(id);
+    if (this.focusedWaitingTile === id) {
+      this.focusedWaitingTile = null;
+    }
+    this.log(`manual mark-done ${tile.name}: ${prev} → done`);
+    this.onChangeEmitter.fire();
+  }
+
   setColor(id: number, color: string | undefined): void {
     const tile = this.terminals.get(id);
     if (!tile) return;
@@ -307,6 +340,20 @@ export class TerminalTracker implements vscode.Disposable {
   getTiles(): TileData[] {
     const tiles = Array.from(this.terminals.values());
 
+    if (this.configManager.getSortMode() === 'manual') {
+      tiles.sort((a, b) => {
+        const ao = this.configManager.getTerminal(a.name)?.order;
+        const bo = this.configManager.getTerminal(b.name)?.order;
+        // Unordered tiles sink to the bottom, most-recent first.
+        if (ao === undefined && bo === undefined) return b.lastActivity - a.lastActivity;
+        if (ao === undefined) return 1;
+        if (bo === undefined) return -1;
+        return ao - bo;
+      });
+      return tiles;
+    }
+
+    // Auto mode: status-based with lastActivity tiebreak.
     const statusOrder: Record<string, number> = { waiting: 0, ignored: 1, ready: 2, working: 3, done: 4, idle: 5 };
     tiles.sort((a, b) => {
       const orderDiff = (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
@@ -315,6 +362,25 @@ export class TerminalTracker implements vscode.Disposable {
     });
 
     return tiles;
+  }
+
+  /**
+   * Apply a new manual ordering by tile IDs. Persists to the config file so
+   * the order survives window reloads and container rebuilds.
+   */
+  reorderTiles(orderedIds: number[]): void {
+    const orderedNames: string[] = [];
+    for (const id of orderedIds) {
+      const tile = this.terminals.get(id);
+      if (tile) orderedNames.push(tile.name);
+    }
+    if (orderedNames.length === 0) return;
+    this.configManager.setOrder(orderedNames);
+    // Dragging is an explicit "I want manual order" signal — flip the mode if
+    // it isn't already set, so the drag takes effect immediately.
+    this.configManager.setSortMode('manual');
+    this.log(`reorder: ${orderedNames.join(', ')}`);
+    this.onChangeEmitter.fire();
   }
 
   getTerminalById(id: number): vscode.Terminal | undefined {

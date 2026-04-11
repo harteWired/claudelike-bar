@@ -6,6 +6,8 @@ const container = document.getElementById('tiles-container');
 
 let currentTiles = [];
 let selectedIndex = -1;
+let draggingId = null;
+let suppressNextClick = false;
 
 // Handle messages from extension
 window.addEventListener('message', (event) => {
@@ -199,6 +201,7 @@ function createTileEl(tile, index) {
   el.tabIndex = 0;
   el.dataset.id = String(tile.id);
   el.setAttribute('role', 'button');
+  el.draggable = true;
 
   const displayName = tile.displayName || tile.name;
   const timeStr = formatRelativeTime(tile.lastActivity);
@@ -229,6 +232,11 @@ function createTileEl(tile, index) {
   el.setAttribute('aria-label', `${displayName} — ${statusLabel}`);
 
   el.addEventListener('click', () => {
+    // Suppress click that immediately follows a drag
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      return;
+    }
     vscode.postMessage({ type: 'switchTerminal', id: tile.id });
   });
 
@@ -240,7 +248,73 @@ function createTileEl(tile, index) {
     selectedIndex = index;
   });
 
+  // --- Drag and drop (reordering) ---
+  el.addEventListener('dragstart', (e) => {
+    draggingId = String(tile.id);
+    el.classList.add('dragging');
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      // Firefox requires dataTransfer to be set for drag to fire
+      e.dataTransfer.setData('text/plain', draggingId);
+    }
+  });
+
+  el.addEventListener('dragend', () => {
+    draggingId = null;
+    el.classList.remove('dragging');
+    clearDropIndicators();
+    // Click event fires on mouseup after drag — suppress it so we don't
+    // accidentally switch to the terminal we just dropped.
+    suppressNextClick = true;
+    setTimeout(() => { suppressNextClick = false; }, 100);
+  });
+
+  el.addEventListener('dragover', (e) => {
+    if (!draggingId || draggingId === el.dataset.id) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    const rect = el.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    clearDropIndicators();
+    el.classList.add(before ? 'drop-before' : 'drop-after');
+  });
+
+  el.addEventListener('dragleave', (e) => {
+    // Only clear if actually leaving this tile (not entering a child)
+    if (e.target === el) {
+      el.classList.remove('drop-before', 'drop-after');
+    }
+  });
+
+  el.addEventListener('drop', (e) => {
+    if (!draggingId || draggingId === el.dataset.id) return;
+    e.preventDefault();
+    const rect = el.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    clearDropIndicators();
+    commitDrop(draggingId, el.dataset.id, before);
+  });
+
   return el;
+}
+
+function clearDropIndicators() {
+  container.querySelectorAll('.drop-before, .drop-after').forEach((el) => {
+    el.classList.remove('drop-before', 'drop-after');
+  });
+}
+
+function commitDrop(draggedId, targetId, before) {
+  const tileEls = Array.from(container.querySelectorAll('.tile'));
+  const ids = tileEls.map((el) => el.dataset.id).filter((id) => id !== draggedId);
+  const targetIndex = ids.indexOf(targetId);
+  if (targetIndex === -1) return;
+  const insertAt = before ? targetIndex : targetIndex + 1;
+  ids.splice(insertAt, 0, draggedId);
+  vscode.postMessage({
+    type: 'reorderTiles',
+    orderedIds: ids.map((id) => Number(id)),
+  });
 }
 
 function formatRelativeTime(timestamp) {
@@ -282,6 +356,15 @@ function showContextMenu(e, tileId) {
 
   const menu = document.createElement('div');
   menu.className = 'context-menu';
+
+  // Mark as done — silences judgement for inactive terminals
+  const doneItem = menuItem('\u2713', 'Mark as done', () => {
+    vscode.postMessage({ type: 'markDone', id: tileId });
+  });
+  menu.appendChild(doneItem);
+
+  // Separator
+  menu.appendChild(menuSeparator());
 
   // Clone terminal
   const cloneItem = menuItem('\u2750', 'Clone terminal', () => {

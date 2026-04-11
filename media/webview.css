@@ -51,6 +51,20 @@ body {
   background: var(--vscode-list-activeSelectionBackground);
 }
 
+/* Drag and drop */
+.tile.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.tile.drop-before {
+  box-shadow: 0 -2px 0 0 var(--vscode-focusBorder);
+}
+
+.tile.drop-after {
+  box-shadow: 0 2px 0 0 var(--vscode-focusBorder);
+}
+
 /* Tile entering animation */
 .tile.entering {
   opacity: 0;

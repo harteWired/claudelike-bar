@@ -82,18 +82,29 @@ Add these to `~/.claude/settings.json` under the `"hooks"` key. If you already h
 
 **4. Reload VS Code** — `Cmd+Shift+P` → "Reload Window"
 
+### After install: let Claude walk you through setup
+
+Once the extension is running, the fastest way to get it feeling *yours* is to open a Claude Code terminal and say:
+
+> *"Walk me through configuring the Claudelike Bar."*
+
+Claude will read `.claudelike-bar.jsonc`, ask what projects you care about, set up auto-start commands, pick a personality mode, assign colors, decide between auto-sort and manual-sort, and nudge you to drag the tiles into whatever order you want. It's the same config file documented below — but you don't have to read it.
+
 ## Features
 
 - **Live status tiles** for every open Claude Code session
 - **Animated dots** — green pulse (working), amber blink (waiting for you), cyan glow (done)
 - **Click to switch** — stops the raccoon behavior
-- **Auto-sorted** — "waiting for input" floats to top
+- **Sort modes** — `auto` (status-based: waiting floats to top) or `manual` (drag to arrange)
+- **Drag and drop reordering** — grab any tile, drop it where you want; order persists
+- **Mark as done** — right-click → "Mark as done" to silence judgement on tiles you've consciously parked
 - **Two personality modes** — chill (quiet) or passive-aggressive (guilt trips)
 - **Context window %** — each tile shows how full the session's context is
 - **Color-coded borders** — per-terminal theme colors
 - **Nicknames** — custom display names for terminals
-- **Auto-start** — mark terminals to launch on VS Code open
+- **Auto-start** — mark terminals to launch on VS Code open, each with its own startup command
 - **Keyboard nav** — arrow keys / j/k, Enter to switch
+- **Debug log** — toggle on to trace every hook event and state transition
 - **DOM diffing** — no flicker, patches only what changed
 
 ## How It Works
@@ -148,6 +159,19 @@ The file supports comments and is organized into sections:
   // "passive-aggressive" — guilt-trips you with snarky messages
   "mode": "chill",
 
+  // "auto"   — sort tiles by status (waiting → ready → working → done → idle)
+  // "manual" — respect drag-and-drop order from terminals[].order
+  // Dragging a tile auto-flips this to "manual".
+  "sortMode": "auto",
+
+  // Command sent into each auto-started terminal. Null to disable.
+  // Per-terminal `command` below overrides this.
+  "claudeCommand": "claude --dangerously-skip-permissions",
+
+  // Turn on to trace hook events and state transitions to the
+  // "Claudelike Bar" output channel + /tmp/claude-dashboard/debug.log
+  "debug": false,
+
   // ┌─────────────────────────────────────────────┐
   // │  FINE TUNING                                │
   // └─────────────────────────────────────────────┘
@@ -165,7 +189,9 @@ The file supports comments and is organized into sections:
       "color": "cyan",
       "icon": "calendar",
       "nickname": null,
-      "autoStart": false
+      "autoStart": true,
+      "command": "claude --dangerously-skip-permissions"
+      // "order" is set automatically when you drag tiles in the sidebar
     }
   }
 }
@@ -179,8 +205,19 @@ The file supports comments and is organized into sections:
 | `icon` | string \| null | auto | Any [VS Code codicon](https://microsoft.github.io/vscode-codicons/dist/codicon.html) name |
 | `nickname` | string \| null | `null` | Display name shown on tile instead of terminal name |
 | `autoStart` | boolean | `false` | Launch this terminal when VS Code starts |
+| `command` | string \| null | *inherits `claudeCommand`* | Command sent to the terminal when auto-started. Omit the field to inherit the global default; set to `null` to open the terminal without running anything. |
+| `order` | number | *unset* | Manual sort position (set by drag-and-drop). Only used when top-level `sortMode` is `"manual"`. |
 
 Edit the file directly — changes take effect immediately. Claude Code can also read and modify it natively.
+
+### Sorting tiles
+
+Two modes, set by the top-level `sortMode` key:
+
+- **`"auto"`** *(default)* — tiles are sorted by status so things needing attention float to the top: `waiting → ignored → ready → working → done → idle`. Most-recent activity wins within a status group.
+- **`"manual"`** — tiles use the per-terminal `order` values (assigned by dragging). New/unordered tiles sink to the bottom.
+
+You can drag tiles in either mode — dragging automatically flips `sortMode` to `"manual"`. To go back to status-based sort, set `"sortMode": "auto"` (the `order` values are left in place, harmlessly ignored, and restored if you switch back).
 
 ### Context % (Optional Enhancement)
 

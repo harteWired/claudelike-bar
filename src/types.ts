@@ -21,6 +21,8 @@ export type WebviewMessage =
   | { type: 'switchTerminal'; id: number }
   | { type: 'cloneTerminal'; id: number }
   | { type: 'killTerminal'; id: number }
+  | { type: 'markDone'; id: number }
+  | { type: 'reorderTiles'; orderedIds: number[] }
   | { type: 'setColor'; id: number; color: string | null };
 
 export interface StatusFileData {

@@ -138,8 +138,8 @@ The "ignored" state only activates in passive-aggressive mode. Messages include 
 
 - *"Switch to passive-aggressive mode"*
 - *"Change the api terminal color to red"*
-- *"Auto-start backend-api when VS Code opens"*
-- *"Give the backend terminal a nickname"*
+- *"Auto-start world-domination when VS Code opens"*
+- *"Give the yeet-to-prod terminal a nickname"*
 
 Claude will read `.claudelike-bar.jsonc`, make the change, and the extension picks it up immediately. No restart needed.
 
@@ -185,18 +185,18 @@ The file supports comments and is organized into sections:
   // └─────────────────────────────────────────────┘
 
   "terminals": {
-    "backend-api": {
+    "world-domination": {
+      "color": "cyan",
+      "icon": "calendar",
+      "autoStart": true,
+      "command": "cd ~/projects/world-domination && claude --dangerously-skip-permissions"
+    },
+    "yeet-to-prod": {
       "color": "yellow",
       "icon": "server",
-      "nickname": "backend",
+      "nickname": "deploy",
       "autoStart": true,
-      "command": "cd ~/projects/backend-api && claude --dangerously-skip-permissions"
-    },
-    "frontend": {
-      "color": "magenta",
-      "icon": "paintcan",
-      "autoStart": true,
-      "command": "cd ~/projects/frontend && claude --dangerously-skip-permissions"
+      "command": "cd ~/projects/yeet-to-prod && claude --dangerously-skip-permissions"
     }
   }
 }

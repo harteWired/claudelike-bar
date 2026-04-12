@@ -426,7 +426,7 @@
           <div class="tile status-ignored" style="--tile-color: var(--vscode-terminal-ansiCyan)">
             <div class="tile-header">
               <span class="dot ignored"></span>
-              <span class="tile-name">my-saas-app</span>
+              <span class="tile-name">world-domination</span>
               <span class="tile-time">4m</span>
               <span class="tile-ctx ctx-warn">ctx 63%</span>
             </div>
@@ -436,7 +436,7 @@
           <div class="tile" style="--tile-color: var(--vscode-terminal-ansiYellow)">
             <div class="tile-header">
               <span class="dot waiting"></span>
-              <span class="tile-name">backend-api</span>
+              <span class="tile-name">yeet-to-prod</span>
               <span class="tile-time">12s</span>
               <span class="tile-ctx ctx-ok">ctx 22%</span>
             </div>
@@ -446,7 +446,7 @@
           <div class="tile active drop-after" style="--tile-color: var(--vscode-terminal-ansiMagenta)">
             <div class="tile-header">
               <span class="dot working"></span>
-              <span class="tile-name">frontend</span>
+              <span class="tile-name">print-go-brrr</span>
               <span class="tile-time">now</span>
               <span class="tile-ctx ctx-ok">ctx 8%</span>
             </div>
@@ -456,7 +456,7 @@
           <div class="tile" style="--tile-color: var(--vscode-terminal-ansiRed)">
             <div class="tile-header">
               <span class="dot done"></span>
-              <span class="tile-name">data-pipeline</span>
+              <span class="tile-name">spore-drive</span>
               <span class="tile-time">28s</span>
               <span class="tile-ctx ctx-crit">ctx 84%</span>
             </div>
@@ -466,7 +466,7 @@
           <div class="tile" style="--tile-color: var(--vscode-terminal-ansiBrightBlue)">
             <div class="tile-header">
               <span class="dot idle"></span>
-              <span class="tile-name">docs</span>
+              <span class="tile-name">brain-dump</span>
               <span class="tile-ctx ctx-ok">ctx 15%</span>
             </div>
             <div class="tile-status">Idle</div>
@@ -475,7 +475,7 @@
           <div class="tile" style="--tile-color: var(--vscode-terminal-ansiGreen)">
             <div class="tile-header">
               <span class="dot idle"></span>
-              <span class="tile-name">infra</span>
+              <span class="tile-name">sourdough-ops</span>
             </div>
             <div class="tile-status">Idle</div>
           </div>
@@ -566,17 +566,17 @@
         <div class="mini-tile" style="--tile-color: var(--vscode-terminal-ansiYellow)">
           <span class="grip">⋮⋮</span>
           <span class="dot waiting"></span>
-          backend-api
+          yeet-to-prod
         </div>
         <div class="mini-tile drop-target" style="--tile-color: var(--vscode-terminal-ansiCyan)">
           <span class="grip">⋮⋮</span>
           <span class="dot ignored"></span>
-          my-saas-app
+          world-domination
         </div>
         <div class="mini-tile dragging" style="--tile-color: var(--vscode-terminal-ansiMagenta)">
           <span class="grip">⋮⋮</span>
           <span class="dot working"></span>
-          frontend
+          print-go-brrr
         </div>
       </div>
     </div>
@@ -622,7 +622,7 @@
       <div class="turn">
         <div class="bubble user">
           <div class="who">You</div>
-          Switch to passive-aggressive mode and rename backend-api to "backend".
+          Switch to passive-aggressive mode and rename yeet-to-prod to "deploy".
         </div>
         <div class="bubble claude">
           <div class="who">Claude</div>
@@ -631,10 +631,10 @@
   <span class="add">"mode": "passive-aggressive",</span>
 
   "terminals": {
-    "backend-api": {
+    "yeet-to-prod": {
       "color": "yellow",
       <span class="rem">"nickname": null,</span>
-      <span class="add">"nickname": "backend",</span>
+      <span class="add">"nickname": "deploy",</span>
       "autoStart": true
     }
   }</div>
@@ -645,18 +645,18 @@
       <div class="turn">
         <div class="bubble user">
           <div class="who">You</div>
-          Auto-start backend-api, frontend, docs, and data-pipeline. Each should <code>cd</code> into its project directory and launch Claude.
+          Auto-start world-domination, print-go-brrr, brain-dump, and spore-drive. Each should <code>cd</code> into its project directory and launch Claude.
         </div>
         <div class="bubble claude">
           <div class="who">Claude</div>
           Four terminals configured with per-terminal <code>command</code> overrides:
-          <div class="diff">  <span class="k">"backend-api"</span>: {
+          <div class="diff">  <span class="k">"world-domination"</span>: {
     <span class="k">"autoStart"</span>: <span class="b">true</span>,
-    <span class="k">"command"</span>: <span class="s">"cd ~/projects/backend-api && claude"</span>
+    <span class="k">"command"</span>: <span class="s">"cd ~/projects/world-domination && claude"</span>
   },
-  <span class="k">"frontend"</span>: {
+  <span class="k">"print-go-brrr"</span>: {
     <span class="k">"autoStart"</span>: <span class="b">true</span>,
-    <span class="k">"command"</span>: <span class="s">"cd ~/projects/frontend && claude"</span>
+    <span class="k">"command"</span>: <span class="s">"cd ~/projects/print-go-brrr && claude"</span>
   },
   ...</div>
           Next time you open VS Code, all four launch and run Claude automatically.
@@ -666,15 +666,15 @@
       <div class="turn">
         <div class="bubble user">
           <div class="who">You</div>
-          The staging terminal needs different flags — it should run Claude with the MCP plugin.
+          sourdough-ops needs different flags — it should run Claude with the MCP plugin.
         </div>
         <div class="bubble claude">
           <div class="who">Claude</div>
           Added a per-terminal <code>command</code> override:
-          <div class="diff">  <span class="k">"staging"</span>: {
-    <span class="k">"color"</span>: <span class="s">"magenta"</span>,
+          <div class="diff">  <span class="k">"sourdough-ops"</span>: {
+    <span class="k">"color"</span>: <span class="s">"green"</span>,
     <span class="k">"autoStart"</span>: <span class="b">true</span>,
-    <span class="k">"command"</span>: <span class="s">"cd ~/projects/staging && claude --mcp-config mcp.json"</span>
+    <span class="k">"command"</span>: <span class="s">"cd ~/projects/sourdough-ops && claude --mcp-config mcp.json"</span>
   }</div>
         </div>
       </div>
@@ -682,14 +682,14 @@
       <div class="turn">
         <div class="bubble user">
           <div class="who">You</div>
-          Something's weird — my frontend tile is stuck on "Working" forever. Can you figure out what's wrong?
+          Something's weird — print-go-brrr is stuck on "Working" forever. Can you figure out what's wrong?
         </div>
         <div class="bubble claude">
           <div class="who">Claude</div>
           Turning on debug logging:
           <div class="diff">  <span class="rem">"debug": false,</span>
   <span class="add">"debug": true,</span></div>
-          Open the <strong>Claudelike Bar</strong> output channel (<code>Ctrl+Shift+U</code>) and run a prompt in frontend. I'll watch for hook events and state transitions — if the hook never fires or the project name doesn't match the tile, we'll see it in the trace.
+          Open the <strong>Claudelike Bar</strong> output channel (<code>Ctrl+Shift+U</code>) and run a prompt in print-go-brrr — I'll watch for hook events and state transitions — if the hook never fires or the project name doesn't match the tile, we'll see it in the trace.
         </div>
       </div>
 

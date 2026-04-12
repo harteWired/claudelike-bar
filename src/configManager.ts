@@ -70,6 +70,7 @@ export class ConfigManager implements vscode.Disposable {
   private writeDebounce: ReturnType<typeof setTimeout> | undefined;
   private isSaving = false;
   private isSavingTimer: ReturnType<typeof setTimeout> | undefined;
+  private hasShownWriteError = false;
   private mergedLabels: Record<string, string> = { ...DEFAULT_LABELS };
 
   constructor() {
@@ -301,8 +302,13 @@ export class ConfigManager implements vscode.Disposable {
     if (this.isSavingTimer) clearTimeout(this.isSavingTimer);
     try {
       fs.writeFileSync(this.configPath, output, 'utf-8');
+      this.hasShownWriteError = false;
     } catch (err) {
       console.error('claudelike-bar: failed to write config', err);
+      if (!this.hasShownWriteError) {
+        this.hasShownWriteError = true;
+        vscode.window.showErrorMessage(`Claudelike Bar: failed to save config — ${err instanceof Error ? err.message : err}`);
+      }
     } finally {
       // Clear the flag after a short delay to outlast the watcher event
       this.isSavingTimer = setTimeout(() => { this.isSaving = false; this.isSavingTimer = undefined; }, 100);

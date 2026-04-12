@@ -6,3 +6,8 @@ CLAUDE.md
 setup.sh
 node_modules/**
 .gitignore
+hooks/**
+.git/**
+*.vsix
+index.html
+package-lock.json

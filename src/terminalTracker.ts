@@ -231,11 +231,11 @@ export class TerminalTracker implements vscode.Disposable {
         changed = true;
       } else if (status === 'ready') {
         // Stop/Notification → ready, then 60s timer → waiting.
-        // `done` and `ignored` are sticky end states the user has explicitly
-        // parked — a background Stop/Notification must NOT un-park them,
-        // otherwise Mark-as-done is defeated the next time that session's
-        // Claude finishes anything. Only UserPromptSubmit (above) un-parks.
-        if (tile.status !== 'ready' && tile.status !== 'done' && tile.status !== 'ignored') {
+        // `done` is a sticky end state (user explicitly parked via
+        // Mark-as-done) — only UserPromptSubmit un-parks it.
+        // `ignored` is NOT sticky — it's auto-assigned by passive-aggressive
+        // mode, so real activity (Stop/Notification) should override it.
+        if (tile.status !== 'ready' && tile.status !== 'done') {
           tile.status = 'ready';
           tile.statusLabel = this.configManager.getLabel('ready');
           tile.ignoredText = undefined;
@@ -243,8 +243,11 @@ export class TerminalTracker implements vscode.Disposable {
           changed = true;
         }
       } else if (status === 'working') {
-        // PreToolUse → working (only if not in a sticky end state without user action)
-        if (tile.status !== 'done' && tile.status !== 'ignored') {
+        // PreToolUse → working. `done` is a sticky end state (user explicitly
+        // parked via Mark-as-done) — only UserPromptSubmit un-parks it.
+        // `ignored` is NOT sticky — it's auto-assigned by passive-aggressive
+        // mode, so real work (PreToolUse) should override it.
+        if (tile.status !== 'done') {
           tile.status = 'working';
           tile.statusLabel = this.configManager.getLabel('working');
           tile.ignoredText = undefined;

@@ -80,9 +80,23 @@ function main() {
   const status = (event === 'Stop' || event === 'Notification') ? 'ready' : 'working';
   const timestamp = Math.floor(Date.now() / 1000);
 
-  const payload = { project, status, timestamp, event };
   const outPath = path.join(statusDir, `${project}.json`);
   const tmpPath = `${outPath}.tmp.${process.pid}`;
+
+  // Read-merge-write: the statusline module (claudelike-statusline.js) owns
+  // `context_percent`. If we just wrote { project, status, timestamp, event }
+  // we'd wipe context_percent on every hook fire (4+ per Claude turn). Read
+  // the existing file first, merge our fields in, preserve whatever the
+  // statusline left behind.
+  let payload = { project, status, timestamp, event };
+  try {
+    const existing = JSON.parse(fs.readFileSync(outPath, 'utf8'));
+    // Existing fields we don't own (like context_percent) carry through;
+    // fields we do own (status, timestamp, event) are overwritten.
+    payload = Object.assign({}, existing, payload);
+  } catch {
+    // No existing file or malformed — write fresh.
+  }
 
   // Atomic write via rename — prevents the extension's FileSystemWatcher from
   // seeing partially-written JSON. The hook fires 4+ times per Claude turn,

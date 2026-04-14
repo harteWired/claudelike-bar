@@ -1,18 +1,12 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import { claudeDir, hooksDir, settingsPath, writeSettingsAtomic } from './claudePaths';
 
 const HOOK_FILENAME = 'dashboard-status.js';
 const HOOK_EVENTS = ['PreToolUse', 'UserPromptSubmit', 'Stop', 'Notification'];
 
 const HOOKS_DOC_URL = 'https://github.com/aes87/claudelike-bar/blob/main/docs/HOOKS.md';
-
-// Paths resolved lazily so tests can swap HOME/USERPROFILE between cases
-// without reloading the module.
-function claudeDir(): string { return path.join(os.homedir(), '.claude'); }
-function hooksDir(): string { return path.join(claudeDir(), 'hooks'); }
-function settingsPath(): string { return path.join(claudeDir(), 'settings.json'); }
 
 function hookCommand(): string {
   const script = path.join(hooksDir(), HOOK_FILENAME);
@@ -149,47 +143,17 @@ export async function runSetup(extensionPath: string): Promise<{ added: number; 
     }
   }
 
-  fs.mkdirSync(claudeDir(), { recursive: true });
-  // Atomic write — settings.json is Claude Code's primary config, corruption
-  // here breaks every Claude command, so write-to-temp + rename is essential.
-  const finalPath = settingsPath();
-  const tmpPath = `${finalPath}.tmp.${process.pid}`;
-  try {
-    fs.writeFileSync(tmpPath, JSON.stringify(settings, null, 2) + '\n');
-    fs.renameSync(tmpPath, finalPath);
-  } catch (err) {
-    try { fs.unlinkSync(tmpPath); } catch {}
-    throw err;
-  }
+  writeSettingsAtomic(settings);
 
   return { added, migrated };
 }
 
 /**
- * Show the first-activation notification with three choices.
- * Returns after the user dismisses or picks an action.
+ * Palette command handler for "Claudelike Bar: Install Hooks" — installs
+ * hooks only. Onboarding orchestration (which may also install the
+ * statusline) lives in `onboarding.ts`, keeping this module independent.
  */
-export async function showSetupNotification(extensionPath: string, log: (msg: string) => void): Promise<void> {
-  const pick = await vscode.window.showInformationMessage(
-    'Claudelike Bar needs to install a Claude Code hook so tiles reflect live status. Nothing is written outside ~/.claude/.',
-    { modal: false },
-    'Install hooks',
-    'Show me the hooks',
-    'Later',
-  );
-
-  if (pick === 'Install hooks') {
-    await executeInstallCommand(extensionPath, log);
-  } else if (pick === 'Show me the hooks') {
-    await vscode.env.openExternal(vscode.Uri.parse(HOOKS_DOC_URL));
-  }
-  // 'Later' or dismissed — do nothing. User can run the command from the palette.
-}
-
-/**
- * Run the install and surface the result as a toast.
- */
-export async function executeInstallCommand(extensionPath: string, log: (msg: string) => void): Promise<void> {
+export async function executeHooksInstallCommand(extensionPath: string, log: (msg: string) => void): Promise<void> {
   try {
     const { added, migrated } = await runSetup(extensionPath);
     log(`setup: added=${added}, migrated=${migrated}`);

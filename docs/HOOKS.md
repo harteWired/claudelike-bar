@@ -204,12 +204,130 @@ rm ~/.claude/hooks/dashboard-status.js
 
 Remove the 4 dashboard-status entries from `~/.claude/settings.json` manually (or via the "Claudelike Bar: Uninstall Hooks" command if we ship one in a future version).
 
+## Statusline (optional)
+
+**What it is:** a separate, optional script that feeds **context window usage** (`ctx %` on each tile) into the sidebar. Hook events don't carry context info, so without a statusline you won't see the `ctx %` badge.
+
+**Is it required?** No. Without it, everything else works — tiles transition between working/ready/waiting correctly. You just don't see a context % number.
+
+**What it installs:** one file and one settings entry.
+
+### The statusline script (in full)
+
+Located at `~/.claude/hooks/claudelike-statusline.js` after install:
+
+```javascript
+#!/usr/bin/env node
+'use strict';
+
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+function sanitizeProject(name) {
+  return (name || '')
+    .replace(/[\r\n]/g, '')
+    .replace(/[\/\\:*?"<>|]/g, '_')
+    .replace(/^\.+|\.+$/g, '');
+}
+
+function main() {
+  const statusDir = process.env.CLAUDELIKE_STATUS_DIR
+    || path.join(os.tmpdir(), 'claude-dashboard');
+  fs.mkdirSync(statusDir, { recursive: true });
+
+  let input = '';
+  try {
+    if (!process.stdin.isTTY) input = fs.readFileSync(0, 'utf8');
+  } catch {}
+
+  let data = {};
+  if (input) { try { data = JSON.parse(input); } catch {} }
+
+  const model = data.model?.display_name || '';
+  const cwd = data.workspace?.current_dir || data.cwd || process.cwd();
+  const ctxRaw = data.context_window?.used_percentage || 0;
+  const ctxPct = Math.max(0, Math.min(100, Math.floor(ctxRaw)));
+  const project = sanitizeProject(process.env.CLAUDELIKE_BAR_NAME || path.basename(cwd)) || 'unknown';
+
+  // Merge context_percent into existing status file (preserves hook state).
+  const statusFile = path.join(statusDir, `${project}.json`);
+  let payload = { project, timestamp: Math.floor(Date.now() / 1000) };
+  try {
+    const existing = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+    payload = Object.assign({}, existing, payload);
+  } catch {}
+  payload.context_percent = ctxPct;
+
+  const tmpPath = `${statusFile}.tmp.${process.pid}`;
+  try {
+    fs.writeFileSync(tmpPath, JSON.stringify(payload) + '\n');
+    fs.renameSync(tmpPath, statusFile);
+  } catch { try { fs.unlinkSync(tmpPath); } catch {} }
+
+  // Minimal status line display.
+  const parts = [];
+  if (model) parts.push(model);
+  if (project && project !== 'unknown') parts.push(project);
+  parts.push(`ctx ${ctxPct}%`);
+  process.stdout.write(parts.join(' │ '));
+}
+
+try { main(); } catch {}
+process.exit(0);
+```
+
+### The settings entry
+
+Added to `~/.claude/settings.json` under the top-level `statusLine` key:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/hooks/claudelike-statusline.js",
+    "padding": 0
+  }
+}
+```
+
+### If you already have a statusline
+
+The extension **will not overwrite it.** Claude Code only supports one `statusLine.command`, and yours takes precedence. Two options:
+
+1. **Keep your statusline, feed context % yourself.** Add these lines to your existing script — it's just a merge of `context_percent` into the per-project status file:
+   ```bash
+   DIR=$(basename "$(echo "$input" | jq -r '.workspace.current_dir // "?"')")
+   PCT=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
+   FILE="/tmp/claude-dashboard/${DIR}.json"
+   mkdir -p /tmp/claude-dashboard
+   if [ -f "$FILE" ]; then
+     jq -c --argjson cp "$PCT" '.context_percent = $cp' "$FILE" > "$FILE.tmp" && mv "$FILE.tmp" "$FILE"
+   else
+     echo "{\"project\":\"$DIR\",\"timestamp\":$(date +%s),\"context_percent\":$PCT}" > "$FILE"
+   fi
+   ```
+   Adjust the path for your OS — Linux uses `/tmp`, macOS uses `$TMPDIR`, Windows uses `%TEMP%`.
+
+2. **Switch to Claudelike Bar's statusline.** Run `Claudelike Bar: Install Statusline` from the command palette. It'll prompt before replacing your existing one.
+
+### Separation of concerns
+
+The hook script and the statusline script are **completely independent modules** at the code level. Neither imports the other. They share only the status file format — a documented, stable interface:
+
+```json
+{ "project": "...", "status": "...", "timestamp": 1234, "event": "...", "context_percent": 42 }
+```
+
+Either component can run without the other. Hooks without statusline: state transitions work, no context %. Statusline without hooks: context % works, but no state (tiles stay idle). Most users want both.
+
 ## Source
 
 Everything here is generated from the actual source files:
 
 - Hook script: [`hooks/dashboard-status.js`](https://github.com/aes87/claudelike-bar/blob/main/hooks/dashboard-status.js)
-- Settings merger: [`scripts/merge-hooks.js`](https://github.com/aes87/claudelike-bar/blob/main/scripts/merge-hooks.js)
-- Extension setup command: [`src/extension.ts`](https://github.com/aes87/claudelike-bar/blob/main/src/extension.ts)
+- Statusline script: [`hooks/claudelike-statusline.js`](https://github.com/aes87/claudelike-bar/blob/main/hooks/claudelike-statusline.js)
+- Hook install: [`src/setup.ts`](https://github.com/aes87/claudelike-bar/blob/main/src/setup.ts)
+- Statusline install: [`src/statusline.ts`](https://github.com/aes87/claudelike-bar/blob/main/src/statusline.ts)
 
 If anything here diverges from the source, the source wins — file an issue.

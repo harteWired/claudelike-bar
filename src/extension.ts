@@ -6,7 +6,9 @@ import { StatusWatcher } from './statusWatcher';
 import { ConfigManager } from './configManager';
 import { shSingleQuote } from './util';
 import { getStatusDir } from './statusDir';
-import { isSetupComplete, executeInstallCommand, showSetupNotification, HOOKS_DOC_URL } from './setup';
+import { executeHooksInstallCommand, HOOKS_DOC_URL } from './setup';
+import { executeStatuslineInstallCommand, STATUSLINE_DOC_URL } from './statusline';
+import { showOnboardingNotification, isSetupComplete } from './onboarding';
 import * as path from 'path';
 
 const SETUP_PROMPTED_KEY = 'claudelike-bar.setupPrompted';
@@ -65,10 +67,14 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
-  // Setup commands — install hooks and view docs
+  // Setup commands — install hooks, install statusline, view docs
   const installHooksCmd = vscode.commands.registerCommand(
     'claudeDashboard.installHooks',
-    () => executeInstallCommand(context.extensionPath, (m) => log(m)),
+    () => executeHooksInstallCommand(context.extensionPath, (m) => log(m)),
+  );
+  const installStatuslineCmd = vscode.commands.registerCommand(
+    'claudeDashboard.installStatusline',
+    () => executeStatuslineInstallCommand(context.extensionPath, (m) => log(m)),
   );
   const showHooksCmd = vscode.commands.registerCommand(
     'claudeDashboard.showHooks',
@@ -76,15 +82,15 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   // First-activation onboarding: if hooks aren't installed AND we haven't
-  // prompted before, show the "Install hooks" notification. Gate on
-  // globalState so users who dismissed once aren't nagged on every reload.
-  // Set the flag only AFTER the notification promise resolves — if the
-  // notification fails to display (e.g., window unavailable), we want to
-  // try again next activation rather than silently silencing it forever.
+  // prompted before, show the install notification. Gate on globalState so
+  // users who dismissed once aren't nagged on every reload. Set the flag
+  // only AFTER the notification promise resolves — if the notification
+  // fails to display (e.g., window unavailable), we want to try again next
+  // activation rather than silently silencing it forever.
   if (!isSetupComplete() && !context.globalState.get<boolean>(SETUP_PROMPTED_KEY)) {
-    showSetupNotification(context.extensionPath, (m) => log(m)).then(
+    showOnboardingNotification(context.extensionPath, (m) => log(m)).then(
       () => context.globalState.update(SETUP_PROMPTED_KEY, true),
-      (err) => log(`setup notification failed: ${err instanceof Error ? err.message : err}`),
+      (err) => log(`onboarding notification failed: ${err instanceof Error ? err.message : err}`),
     );
   }
 
@@ -168,6 +174,7 @@ export function activate(context: vscode.ExtensionContext) {
     registration,
     openConfigCmd,
     installHooksCmd,
+    installStatuslineCmd,
     showHooksCmd,
     tracker,
     watcher,

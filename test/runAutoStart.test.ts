@@ -20,6 +20,7 @@ import { ConfigManager } from '../src/configManager';
 interface CreateTerminalOptions {
   name: string;
   env?: Record<string, string>;
+  cwd?: string;
   shellPath?: string;
   shellArgs?: string[];
 }
@@ -44,6 +45,7 @@ function runAutoStartLike(cm: ConfigManager, names: string[]): void {
     vscode.window.createTerminal({
       name,
       env: opts.env,
+      ...(opts.cwd ? { cwd: opts.cwd } : {}),
       ...(opts.shellPath ? { shellPath: opts.shellPath } : {}),
       ...(opts.shellArgs ? { shellArgs: opts.shellArgs } : {}),
     });
@@ -136,6 +138,27 @@ describe('runAutoStart → createTerminal contract', () => {
 
     expect(calls[0].shellPath).toBe('pwsh.exe');
     expect(calls[0].shellArgs).toEqual(['-NoProfile']);
+  });
+
+  it('forwards cwd through createTerminal API (cross-platform, no cd && needed)', () => {
+    writeConfig({
+      terminals: {
+        'win-proj': {
+          color: 'cyan',
+          icon: null,
+          nickname: null,
+          autoStart: true,
+          cwd: 'C:\\Users\\me\\projects\\win-proj',
+        },
+      },
+    });
+    const calls = captureCreateTerminalCalls();
+
+    runAutoStartLike(makeCm(), ['win-proj']);
+
+    expect(calls[0].cwd).toBe('C:\\Users\\me\\projects\\win-proj');
+    expect(calls[0].env?.CLAUDELIKE_BAR_NAME).toBe('win-proj');
+    expect(calls[0].shellPath).toBeUndefined();
   });
 
   it('handles names with special shell-meta characters safely', () => {

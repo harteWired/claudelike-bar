@@ -208,12 +208,17 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 /**
- * Create terminals marked `autoStart: true` in the config, passing the
- * `CLAUDELIKE_BAR_NAME` env var through the VS Code createTerminal API so
- * the hook script can map the terminal to a tile. Cross-platform — no
- * shell-syntax quoting, no visible `export …` noise line. Per-terminal
- * `shellPath` / `shellArgs` from the config let Windows users pin git-bash
- * (or any shell) when their `command` uses bash syntax.
+ * Create terminals marked `autoStart: true` in the config. All options
+ * flow through the VS Code `createTerminal` API — cross-platform, no
+ * shell-syntax quoting. The recommended config pattern is:
+ *
+ *     "cwd": "/path/to/project",
+ *     "command": "claude"
+ *
+ * `cwd` sets the working directory via the API; `command` is sent into the
+ * terminal via `sendText` and should be a simple executable invocation (no
+ * `cd`, no `&&`). Legacy `cd /path && claude` commands still work but are
+ * shell-specific and won't run on PowerShell.
  *
  * Runs after a grace period so VS Code's persistent-session revival can
  * restore terminals from the previous window first — revived terminals
@@ -236,15 +241,16 @@ function runAutoStart(
     const terminal = vscode.window.createTerminal({
       name,
       env: opts.env,
+      ...(opts.cwd ? { cwd: opts.cwd } : {}),
       ...(opts.shellPath ? { shellPath: opts.shellPath } : {}),
       ...(opts.shellArgs ? { shellArgs: opts.shellArgs } : {}),
     });
     const command = configManager.getAutoStartCommand(name);
     if (command) {
-      log(`  ${name} → ${command}${opts.shellPath ? ` [shell: ${opts.shellPath}]` : ''}`);
+      log(`  ${name} → ${command}${opts.cwd ? ` [cwd: ${opts.cwd}]` : ''}${opts.shellPath ? ` [shell: ${opts.shellPath}]` : ''}`);
       terminal.sendText(command);
     } else {
-      log(`  ${name} → (no command)${opts.shellPath ? ` [shell: ${opts.shellPath}]` : ''}`);
+      log(`  ${name} → (no command)${opts.cwd ? ` [cwd: ${opts.cwd}]` : ''}${opts.shellPath ? ` [shell: ${opts.shellPath}]` : ''}`);
     }
   }
 }

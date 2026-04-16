@@ -155,6 +155,145 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
     expect(opts.shellArgs).toEqual(['-l', '-i']);
   });
 
+  it('returns cwd when the terminal config sets one', () => {
+    writeConfig({
+      terminals: {
+        'with-cwd': {
+          color: 'cyan',
+          icon: null,
+          nickname: null,
+          autoStart: true,
+          cwd: 'C:\\Users\\me\\projects\\foo',
+        },
+      },
+    });
+    const opts = makeCm().getAutoStartTerminalOptions('with-cwd');
+    expect(opts.cwd).toBe('C:\\Users\\me\\projects\\foo');
+    expect(opts.env.CLAUDELIKE_BAR_NAME).toBe('with-cwd');
+  });
+
+  it('omits cwd when the terminal config has none', () => {
+    writeConfig({
+      terminals: {
+        'no-cwd': { color: 'cyan', icon: null, nickname: null, autoStart: true },
+      },
+    });
+    const opts = makeCm().getAutoStartTerminalOptions('no-cwd');
+    expect(opts.cwd).toBeUndefined();
+  });
+
+  it('ignores empty-string cwd (treats as unset)', () => {
+    writeConfig({
+      terminals: {
+        'empty-cwd': { color: 'cyan', icon: null, nickname: null, autoStart: true, cwd: '' },
+      },
+    });
+    const opts = makeCm().getAutoStartTerminalOptions('empty-cwd');
+    expect(opts.cwd).toBeUndefined();
+  });
+
+  // --- cd → cwd migration (v0.9.4) ---
+
+  it('migrates cd /path && command into cwd + command on load', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          command: "cd '/home/user/projects/proj' && claude --enable-auto-mode",
+        },
+      },
+    });
+    const cm2 = makeCm();
+    const cfg = cm2.getTerminal('proj');
+    expect(cfg?.cwd).toBe('/home/user/projects/proj');
+    expect(cfg?.command).toBe('claude --enable-auto-mode');
+  });
+
+  it('migrates cd with double quotes', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          command: 'cd "C:\\Users\\me\\proj" && claude',
+        },
+      },
+    });
+    const cfg = makeCm().getTerminal('proj');
+    expect(cfg?.cwd).toBe('C:\\Users\\me\\proj');
+    expect(cfg?.command).toBe('claude');
+  });
+
+  it('migrates cd with unquoted path (no spaces)', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          command: 'cd /workspace/projects/proj && claude',
+        },
+      },
+    });
+    const cfg = makeCm().getTerminal('proj');
+    expect(cfg?.cwd).toBe('/workspace/projects/proj');
+    expect(cfg?.command).toBe('claude');
+  });
+
+  it('migrates cd with semicolon separator (PowerShell-style)', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          command: "cd 'C:\\Users\\me\\proj'; claude --enable-auto-mode",
+        },
+      },
+    });
+    const cfg = makeCm().getTerminal('proj');
+    expect(cfg?.cwd).toBe('C:\\Users\\me\\proj');
+    expect(cfg?.command).toBe('claude --enable-auto-mode');
+  });
+
+  it('does NOT migrate when cwd is already set', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          cwd: '/already/set',
+          command: "cd /other/path && claude",
+        },
+      },
+    });
+    const cfg = makeCm().getTerminal('proj');
+    expect(cfg?.cwd).toBe('/already/set');
+    expect(cfg?.command).toBe('cd /other/path && claude');
+  });
+
+  it('does NOT migrate commands that are not cd patterns', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          command: 'claude --enable-auto-mode',
+        },
+      },
+    });
+    const cfg = makeCm().getTerminal('proj');
+    expect(cfg?.cwd).toBeUndefined();
+    expect(cfg?.command).toBe('claude --enable-auto-mode');
+  });
+
+  it('handles Windows paths with spaces in single quotes', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          command: "cd 'C:/Users/MattHarte/Documents/Claude Code/Chief-of-Staff' && claude --enable-auto-mode",
+        },
+      },
+    });
+    const cfg = makeCm().getTerminal('proj');
+    expect(cfg?.cwd).toBe('C:/Users/MattHarte/Documents/Claude Code/Chief-of-Staff');
+    expect(cfg?.command).toBe('claude --enable-auto-mode');
+  });
+
   it('drops shellArgs when every entry is non-string (remains undefined)', () => {
     writeConfig({
       terminals: {

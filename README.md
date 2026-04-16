@@ -198,14 +198,16 @@ The file supports comments and is organized into sections:
       "color": "cyan",
       "icon": "calendar",
       "autoStart": true,
-      "command": "cd ~/projects/world-domination && claude --dangerously-skip-permissions"
+      "cwd": "~/projects/world-domination",
+      "command": "claude"
     },
     "yeet-to-prod": {
       "color": "yellow",
       "icon": "server",
       "nickname": "deploy",
       "autoStart": true,
-      "command": "cd ~/projects/yeet-to-prod && claude --dangerously-skip-permissions"
+      "cwd": "~/projects/yeet-to-prod",
+      "command": "claude"
     }
   }
 }
@@ -219,7 +221,8 @@ The file supports comments and is organized into sections:
 | `icon` | string \| null | auto | Any [VS Code codicon](https://microsoft.github.io/vscode-codicons/dist/codicon.html) name |
 | `nickname` | string \| null | `null` | Display name shown on tile instead of terminal name |
 | `autoStart` | boolean | `false` | Launch this terminal when VS Code starts |
-| `command` | string \| null | *inherits `claudeCommand`* | Command sent to the terminal when auto-started. Use `"cd /path/to/project && claude"` to set the working directory. Omit the field to inherit the global default; set to `null` to open the terminal without running anything. |
+| `cwd` | string \| null | *unset* | Working directory for the terminal. Cross-platform — passed through VS Code's `createTerminal({ cwd })` API, not shell syntax. Use this instead of `cd /path &&` in `command`. |
+| `command` | string \| null | *inherits `claudeCommand`* | Command sent to the terminal when auto-started. With `cwd` set, this can be a simple `"claude"` — no `cd`, no `&&`, works on every shell. Omit the field to inherit the global default; set to `null` to open the terminal without running anything. |
 | `order` | number | *unset* | Manual sort position (set by drag-and-drop). Only used when top-level `sortMode` is `"manual"`. |
 
 Edit the file directly — changes take effect immediately. Claude Code can also read and modify it natively.
@@ -233,33 +236,28 @@ Two modes, set by the top-level `sortMode` key:
 
 You can drag tiles in either mode — dragging automatically flips `sortMode` to `"manual"`. To go back to status-based sort, set `"sortMode": "auto"` (the `order` values are left in place, harmlessly ignored, and restored if you switch back).
 
-### Windows / PowerShell — `command` field
+### Cross-platform auto-start (Windows, macOS, Linux)
 
-The `command` field is passed to `terminal.sendText()` as-is. VS Code's default shell on Windows is PowerShell, which doesn't understand bash syntax like `export` or `&&`. You have three options:
+Use `cwd` + `command` instead of baking `cd /path && claude` into the command string. `cwd` goes through VS Code's API — works on every shell, every platform:
 
-1. **Pin git-bash per terminal** *(recommended if your commands use bash syntax)* — set `shellPath` on each terminal:
-   ```jsonc
-   "my-project": {
-     "autoStart": true,
-     "command": "cd '/c/Users/you/projects/foo' && claude --dangerously-skip-permissions",
-     "shellPath": "C:\\Program Files\\Git\\bin\\bash.exe"
-   }
-   ```
-   Optional `shellArgs` accepts an array of flags (e.g. `["-l"]` for a login shell).
+```jsonc
+"my-project": {
+  "autoStart": true,
+  "cwd": "C:\\Users\\you\\projects\\foo",
+  "command": "claude"
+}
+```
 
-2. **Write PowerShell-native commands** — `;` chains statements; `cd` works with Windows paths:
-   ```jsonc
-   "command": "cd 'C:\\Users\\you\\projects\\foo'; claude --dangerously-skip-permissions"
-   ```
-   No `shellPath` needed — this runs in the VS Code default.
+This is the recommended pattern. `command` is just the thing to run — no `cd`, no `&&`, no shell-specific syntax. Works identically on PowerShell, bash, zsh, cmd, fish.
 
-3. **Use cmd.exe** — pin it explicitly:
-   ```jsonc
-   "command": "cd /d C:\\Users\\you\\projects\\foo && claude --dangerously-skip-permissions",
-   "shellPath": "C:\\Windows\\System32\\cmd.exe"
-   ```
+**Legacy `cd && claude` commands still work** — they're sent via `sendText()` and execute in whatever shell the terminal runs. But `&&` fails on PowerShell 5.1 (Windows default), so new configs should use `cwd` instead.
 
-The `CLAUDELIKE_BAR_NAME` env var is set by the extension through VS Code's `createTerminal({ env })` API — no shell syntax involved, so every shell on every platform sees it.
+**If you need a specific shell** (e.g., git-bash for legacy commands): set `shellPath` per terminal:
+```jsonc
+"shellPath": "C:\\Program Files\\Git\\bin\\bash.exe"
+```
+
+The `CLAUDELIKE_BAR_NAME` env var is set through VS Code's `createTerminal({ env })` API — no shell syntax, every platform.
 
 ### Context % (Optional Enhancement)
 

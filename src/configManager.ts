@@ -20,11 +20,19 @@ export interface TerminalConfig {
    */
   projectName?: string | null;
   /**
+   * Working directory the terminal opens in. Passed to VS Code's
+   * `createTerminal({ cwd })` API — cross-platform, no shell syntax.
+   * Separating `cwd` from `command` means `command` can be a simple
+   * `"claude --auto"` that works on any shell, instead of a
+   * shell-specific `"cd '/path' && claude --auto"` pattern.
+   */
+  cwd?: string | null;
+  /**
    * Absolute path to a shell executable (e.g.
    * "C:\\Program Files\\Git\\bin\\bash.exe"). When set, auto-started terminals
-   * use this shell regardless of VS Code's default profile. Lets Windows
-   * users pin git-bash so bash syntax in `command` (`cd && claude`, single
-   * quotes) works. Leave unset to inherit the VS Code default.
+   * use this shell regardless of VS Code's default profile. Escape hatch
+   * for users who need a specific shell; most users should use `cwd` +
+   * `command` instead. Leave unset to inherit the VS Code default.
    */
   shellPath?: string | null;
   /**
@@ -43,6 +51,7 @@ export interface TerminalConfig {
  */
 export interface AutoStartTerminalOptions {
   env: Record<string, string>;
+  cwd?: string;
   shellPath?: string;
   shellArgs?: string[];
 }
@@ -132,6 +141,7 @@ export class ConfigManager implements vscode.Disposable {
     // Try new JSONC file first
     if (fs.existsSync(this.configPath)) {
       this.loadFrom(this.configPath);
+      this.migrateCdCommands();
       return;
     }
 
@@ -161,6 +171,31 @@ export class ConfigManager implements vscode.Disposable {
       }
     } catch {
       // File is malformed — start fresh
+    }
+  }
+
+  /**
+   * One-time migration: extract `cd /path && command` patterns in the
+   * `command` field into separate `cwd` + `command`. Runs on load so
+   * users upgrading from pre-v0.9.4 don't need to hand-edit every terminal.
+   * Only touches terminals that have a `command` and no `cwd` already set.
+   */
+  private migrateCdCommands(): void {
+    // Match:  cd <path> && <rest>   or   cd <path> ; <rest>
+    // Path may be single-quoted, double-quoted, or unquoted (no spaces).
+    const cdPattern = /^cd\s+(?:'([^']*)'|"([^"]*)"|(\S+))\s*(?:&&|;)\s*(.+)$/;
+    let migrated = 0;
+    for (const [, cfg] of Object.entries(this.config.terminals)) {
+      if (!cfg.command || cfg.cwd) continue;
+      const m = cfg.command.match(cdPattern);
+      if (m) {
+        cfg.cwd = m[1] ?? m[2] ?? m[3]; // whichever capture group matched
+        cfg.command = m[4];              // everything after the separator
+        migrated++;
+      }
+    }
+    if (migrated > 0) {
+      this.scheduleSave();
     }
   }
 
@@ -254,21 +289,20 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   /**
-   * Shell + env options for an auto-started terminal. Returns the env var
-   * needed by the hook script, plus any optional per-terminal `shellPath` /
-   * `shellArgs` override. Cross-platform — no shell-syntax quoting.
+   * Options for an auto-started terminal: env var, optional cwd, optional
+   * shell override. Cross-platform — no shell-syntax quoting anywhere.
    */
   getAutoStartTerminalOptions(name: string): AutoStartTerminalOptions {
     const opts: AutoStartTerminalOptions = {
       env: { CLAUDELIKE_BAR_NAME: name },
     };
     const cfg = this.config.terminals[name];
+    if (cfg?.cwd && typeof cfg.cwd === 'string' && cfg.cwd.length > 0) {
+      opts.cwd = cfg.cwd;
+    }
     if (cfg?.shellPath && typeof cfg.shellPath === 'string' && cfg.shellPath.length > 0) {
       opts.shellPath = cfg.shellPath;
       if (Array.isArray(cfg.shellArgs) && cfg.shellArgs.length > 0) {
-        // Defensive copy + string coercion — JSONC can smuggle arbitrary JSON.
-        // If every entry filters out, drop the key so extension.ts doesn't
-        // pass an empty shellArgs array to createTerminal.
         const cleaned = cfg.shellArgs.filter((a): a is string => typeof a === 'string');
         if (cleaned.length > 0) opts.shellArgs = cleaned;
       }
@@ -456,6 +490,8 @@ export class ConfigManager implements vscode.Disposable {
       '  // icon:      any VS Code codicon (calendar, server, notebook, lock, etc.)',
       '  // nickname:  display name override (null = use terminal name)',
       '  // autoStart: true = open this terminal when VS Code starts',
+      '  // cwd:       working directory (cross-platform, no shell syntax needed)',
+      '  //              "cwd": "/path/to/project", "command": "claude"',
       '  // command:   override the global claudeCommand for this terminal (omit to inherit)',
       '  // projectName: hook project name that maps to this terminal — set this',
       '  //            when the terminal display name differs from the hook cwd',

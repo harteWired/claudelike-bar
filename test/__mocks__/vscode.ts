@@ -48,6 +48,11 @@ export const window = {
     return t;
   }),
   showErrorMessage: vi.fn(),
+  showInformationMessage: vi.fn(),
+  showWarningMessage: vi.fn(),
+  showQuickPick: vi.fn(),
+  showInputBox: vi.fn(),
+  showOpenDialog: vi.fn(),
 };
 
 export class RelativePattern {

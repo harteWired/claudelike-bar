@@ -10,6 +10,7 @@ import {
   executeStatuslineInstallCommand,
   executeStatuslineRestoreCommand,
 } from './statusline';
+import { executeRegisterProjectCommand } from './registerProject';
 import { showOnboardingNotification, isSetupComplete } from './onboarding';
 import * as path from 'path';
 
@@ -81,6 +82,10 @@ export function activate(context: vscode.ExtensionContext) {
   const restoreStatuslineCmd = vscode.commands.registerCommand(
     'claudeDashboard.restoreStatusline',
     () => executeStatuslineRestoreCommand((m) => log(m)),
+  );
+  const registerProjectCmd = vscode.commands.registerCommand(
+    'claudeDashboard.registerProject',
+    () => executeRegisterProjectCommand(configManager, (m) => log(m)),
   );
   const showHooksCmd = vscode.commands.registerCommand(
     'claudeDashboard.showHooks',
@@ -182,6 +187,7 @@ export function activate(context: vscode.ExtensionContext) {
     installHooksCmd,
     installStatuslineCmd,
     restoreStatuslineCmd,
+    registerProjectCmd,
     showHooksCmd,
     tracker,
     watcher,

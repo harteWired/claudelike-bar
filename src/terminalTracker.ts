@@ -256,7 +256,20 @@ export class TerminalTracker implements vscode.Disposable {
     if (tile.name === projectName) return 3;
     const cfg = this.configManager.getTerminal(tile.name);
     if (cfg?.projectName && cfg.projectName === projectName) return 2;
-    if (cfg?.projectName) return 0; // explicit alias set but didn't match — opt out of normalized
+    // projectName is the user's "I've handled disambiguation" signal —
+    // opt out of ALL fuzzy matching (path-based AND normalized).
+    if (cfg?.projectName) return 0;
+    // v0.10 — path-based matching. If the incoming projectName looks like a
+    // basename that could have come from a directory matching this tile's
+    // registered `path`, score it between alias and normalized. This catches
+    // manually-opened terminals whose hook falls back to basename(cwd) when
+    // the tile's path ends with that basename.
+    if (cfg?.path && typeof cfg.path === 'string') {
+      const pathBasename = cfg.path.split(/[/\\]/).filter(Boolean).pop() ?? '';
+      if (pathBasename && this.normalizeForMatch(pathBasename) === this.normalizeForMatch(projectName)) {
+        return 1.5;
+      }
+    }
     if (this.normalizeForMatch(tile.name) === this.normalizeForMatch(projectName)) return 1;
     return 0;
   }
@@ -269,13 +282,24 @@ export class TerminalTracker implements vscode.Disposable {
   private findMatchingTile(projectName: string): TileData | undefined {
     let best: TileData | undefined;
     let bestScore = 0;
+    let tied = false;
     for (const [, tile] of this.terminals) {
       const score = this.matchScore(tile, projectName);
       if (score > bestScore) {
         best = tile;
         bestScore = score;
+        tied = false;
         if (score === 3) break; // exact match — can't do better
+      } else if (score === bestScore && score > 0 && tile !== best) {
+        tied = true;
       }
+    }
+    // When multiple tiles tie at the same fuzzy score, the match is
+    // ambiguous — return undefined rather than picking one arbitrarily.
+    // Exact matches (score 3) can't tie by definition (names are unique).
+    if (tied && bestScore < 3) {
+      this.log(() => `ambiguous match for "${projectName}": multiple tiles scored ${bestScore}, skipping`);
+      return undefined;
     }
     return best;
   }

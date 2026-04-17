@@ -155,6 +155,89 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
     expect(opts.shellArgs).toEqual(['-l', '-i']);
   });
 
+  it('cwd defaults to path when cwd is unset', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          path: '/home/user/projects/proj',
+        },
+      },
+    });
+    const opts = makeCm().getAutoStartTerminalOptions('proj');
+    expect(opts.cwd).toBe('/home/user/projects/proj');
+  });
+
+  it('explicit cwd overrides path', () => {
+    writeConfig({
+      terminals: {
+        'proj': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          path: '/home/user/projects/proj',
+          cwd: '/home/user/projects/proj/subdir',
+        },
+      },
+    });
+    const opts = makeCm().getAutoStartTerminalOptions('proj');
+    expect(opts.cwd).toBe('/home/user/projects/proj/subdir');
+  });
+
+  it('addProjectEntry adds a fully-specified entry', () => {
+    writeConfig({ terminals: {} });
+    const cm2 = makeCm();
+    const added = cm2.addProjectEntry('new-proj', {
+      path: '/some/path',
+      command: 'claude',
+      color: 'cyan',
+      icon: null,
+      nickname: null,
+      autoStart: true,
+    });
+    expect(added).toBe(true);
+    const cfg = cm2.getTerminal('new-proj');
+    expect(cfg?.path).toBe('/some/path');
+    expect(cfg?.command).toBe('claude');
+    expect(cfg?.autoStart).toBe(true);
+  });
+
+  it('addProjectEntry refuses to overwrite without overwrite flag', () => {
+    writeConfig({
+      terminals: {
+        'existing': { color: 'cyan', icon: null, nickname: null, autoStart: true, path: '/original' },
+      },
+    });
+    const cm2 = makeCm();
+    const result = cm2.addProjectEntry('existing', {
+      path: '/overwrite-attempt',
+      command: 'claude',
+      color: 'green',
+      icon: null,
+      nickname: null,
+      autoStart: false,
+    });
+    expect(result).toBe(false);
+    expect(cm2.getTerminal('existing')?.path).toBe('/original');
+  });
+
+  it('addProjectEntry overwrites when overwrite=true', () => {
+    writeConfig({
+      terminals: {
+        'existing': { color: 'cyan', icon: null, nickname: null, autoStart: true, path: '/original' },
+      },
+    });
+    const cm2 = makeCm();
+    const result = cm2.addProjectEntry('existing', {
+      path: '/new-path',
+      command: 'claude',
+      color: 'green',
+      icon: null,
+      nickname: null,
+      autoStart: false,
+    }, true);
+    expect(result).toBe(true);
+    expect(cm2.getTerminal('existing')?.path).toBe('/new-path');
+  });
+
   it('returns cwd when the terminal config sets one', () => {
     writeConfig({
       terminals: {

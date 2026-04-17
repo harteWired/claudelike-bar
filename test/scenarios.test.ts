@@ -62,6 +62,69 @@ function setupScenarioTracker(configOverrides: Record<string, any> = {}) {
   return { tracker, config, term, tile, dispose };
 }
 
+describe('v0.10 scenario: path-based matching', () => {
+  let tracker: TerminalTracker;
+  let config: ConfigManager;
+
+  beforeEach(() => {
+    __resetMock();
+    (vscode.workspace as any).workspaceFolders = [
+      { uri: (vscode.Uri as any).file(TEST_ROOT), name: 'test', index: 0 },
+    ];
+    writeConfig({
+      terminals: {
+        'client-api': {
+          color: 'cyan', icon: null, nickname: null, autoStart: true,
+          path: '/home/user/work/client-a/api',
+        },
+        'personal-api': {
+          color: 'green', icon: null, nickname: null, autoStart: true,
+          path: '/home/user/personal/api',
+        },
+      },
+    });
+    addMockTerminal('client-api');
+    addMockTerminal('personal-api');
+    config = new ConfigManager();
+    tracker = new TerminalTracker(config);
+  });
+
+  afterEach(() => {
+    tracker.dispose();
+    config.dispose();
+    cleanConfig();
+  });
+
+  it('exact slug match: status update for "client-api" hits the right tile', () => {
+    tracker.updateStatus('client-api', 'working', 'UserPromptSubmit');
+    const tiles = tracker.getTiles();
+    const client = tiles.find(t => t.name === 'client-api')!;
+    const personal = tiles.find(t => t.name === 'personal-api')!;
+    expect(client.status).toBe('working');
+    expect(personal.status).toBe('idle');
+  });
+
+  it('ambiguous path-basename: hook sends "api" matching both tiles, neither updates (skip)', () => {
+    // Both tiles have paths ending in /api, so both score 1.5. The matcher
+    // detects the tie and skips — better to drop the update than guess wrong.
+    tracker.updateStatus('api', 'working', 'UserPromptSubmit');
+    const tiles = tracker.getTiles();
+    const matched = tiles.filter(t => t.status === 'working');
+    expect(matched.length).toBe(0); // ambiguous → no match
+  });
+
+  it('two projects with same basename: slug-based env var disambiguates', () => {
+    // Auto-start sets CLAUDELIKE_BAR_NAME=slug, so hook writes the slug
+    // directly. No ambiguity.
+    tracker.updateStatus('client-api', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('personal-api', 'ready', 'Stop');
+
+    const tiles = tracker.getTiles();
+    expect(tiles.find(t => t.name === 'client-api')!.status).toBe('working');
+    expect(tiles.find(t => t.name === 'personal-api')!.status).toBe('ready');
+  });
+});
+
 describe('v0.9.3 scenario: permission approval flow (F1 + F3)', () => {
   let tracker: TerminalTracker;
   let config: ConfigManager;

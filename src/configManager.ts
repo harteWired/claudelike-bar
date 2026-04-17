@@ -20,6 +20,13 @@ export interface TerminalConfig {
    */
   projectName?: string | null;
   /**
+   * Absolute path to the project directory. Canonical identity — used for
+   * matching hook status updates to tiles and for deriving collision-free
+   * status filenames. Also serves as the default `cwd` when `cwd` is unset.
+   * Set automatically by the "Register Project" command or the setup wizard.
+   */
+  path?: string | null;
+  /**
    * Working directory the terminal opens in. Passed to VS Code's
    * `createTerminal({ cwd })` API — cross-platform, no shell syntax.
    * Separating `cwd` from `command` means `command` can be a simple
@@ -297,9 +304,14 @@ export class ConfigManager implements vscode.Disposable {
       env: { CLAUDELIKE_BAR_NAME: name },
     };
     const cfg = this.config.terminals[name];
-    if (cfg?.cwd && typeof cfg.cwd === 'string' && cfg.cwd.length > 0) {
-      opts.cwd = cfg.cwd;
-    }
+    // cwd defaults to path when unset — most users set path via the wizard
+    // and never touch cwd separately.
+    const cwd = (cfg?.cwd && typeof cfg.cwd === 'string' && cfg.cwd.length > 0)
+      ? cfg.cwd
+      : (cfg?.path && typeof cfg.path === 'string' && cfg.path.length > 0)
+        ? cfg.path
+        : undefined;
+    if (cwd) opts.cwd = cwd;
     if (cfg?.shellPath && typeof cfg.shellPath === 'string' && cfg.shellPath.length > 0) {
       opts.shellPath = cfg.shellPath;
       if (Array.isArray(cfg.shellArgs) && cfg.shellArgs.length > 0) {
@@ -325,6 +337,20 @@ export class ConfigManager implements vscode.Disposable {
     };
 
     this.scheduleSave();
+  }
+
+  /**
+   * Add a fully-specified project entry. Used by "Register Project" and the
+   * setup wizard — unlike `ensureEntry` (which auto-populates from terminal
+   * names), this accepts all fields including `path` and `cwd`.
+   * Returns false (no-op) if the slug already exists and `overwrite` is not
+   * set. Callers should check the return value or validate beforehand.
+   */
+  addProjectEntry(slug: string, entry: TerminalConfig, overwrite = false): boolean {
+    if (this.config.terminals[slug] && !overwrite) return false;
+    this.config.terminals[slug] = entry;
+    this.scheduleSave();
+    return true;
   }
 
   /** Update the color for a terminal in the config file. */
@@ -490,8 +516,9 @@ export class ConfigManager implements vscode.Disposable {
       '  // icon:      any VS Code codicon (calendar, server, notebook, lock, etc.)',
       '  // nickname:  display name override (null = use terminal name)',
       '  // autoStart: true = open this terminal when VS Code starts',
-      '  // cwd:       working directory (cross-platform, no shell syntax needed)',
-      '  //              "cwd": "/path/to/project", "command": "claude"',
+      '  // path:      absolute path to the project directory (canonical identity)',
+      '  //            also used as the default cwd when cwd is unset',
+      '  // cwd:       working directory override (defaults to path if unset)',
       '  // command:   override the global claudeCommand for this terminal (omit to inherit)',
       '  // projectName: hook project name that maps to this terminal — set this',
       '  //            when the terminal display name differs from the hook cwd',

@@ -160,6 +160,20 @@ Sidebar tiles update in real time
 
 The "ignored" state only activates in passive-aggressive mode. Messages include gems like "Patiently judging you" and "I'll just wait here then."
 
+## Commands
+
+All commands are available from the command palette (`Cmd+Shift+P` / `Ctrl+Shift+P`), prefixed with **Claudelike Bar:**.
+
+| Command | What It Does |
+|---------|-------------|
+| **Set Up Projects** | 5-step setup wizard — pick folders, name projects, assign colors, choose command, review. Best for first-time setup or reconfiguring after an upgrade. |
+| **Register Project** | Add a single project — folder picker, slug assignment, writes one entry. Quick add without the full wizard. |
+| **Open Config** | Opens `~/.claude/claudelike-bar.jsonc` in the editor. Also available as the gear icon in the sidebar header. |
+| **Install Hooks** | Copies the hook script to `~/.claude/hooks/` and registers event handlers in `~/.claude/settings.json`. Idempotent. |
+| **Install Statusline** | Installs the optional context % statusline script. Prompts before replacing an existing statusline. |
+| **Restore Previous Statusline** | Puts back the statusline that was replaced by "Install Statusline", from the backup file. |
+| **Show Me the Hooks** | Opens the hooks documentation in your browser — see exactly what gets written before installing. |
+
 ## How to Configure
 
 **The easiest way: just tell Claude Code what you want.** The config file is designed to be read and edited by Claude natively. Try:

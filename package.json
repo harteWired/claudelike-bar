@@ -90,12 +90,12 @@
       {
         "command": "claudeDashboard.registerProject",
         "title": "Register Project",
+        "icon": "$(add)",
         "category": "Claudelike Bar"
       },
       {
         "command": "claudeDashboard.setupProjects",
         "title": "Set Up Projects",
-        "icon": "$(add)",
         "category": "Claudelike Bar"
       },
       {
@@ -107,7 +107,7 @@
     "menus": {
       "view/title": [
         {
-          "command": "claudeDashboard.setupProjects",
+          "command": "claudeDashboard.registerProject",
           "when": "view == claudeDashboard.mainView",
           "group": "navigation"
         },

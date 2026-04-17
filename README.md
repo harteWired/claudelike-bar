@@ -251,7 +251,7 @@ The file supports comments and is organized into sections:
 | Field | Type | Default | What It Does |
 |-------|------|---------|--------------|
 | `path` | string \| null | *unset* | Absolute path to the project directory. Canonical identity — used for matching hook updates to tiles and deriving collision-free status filenames. Also the default `cwd` when `cwd` is unset. Set automatically by the setup wizard or "Register Project" command. |
-| `color` | string | auto | `cyan`, `green`, `blue`, `magenta`, `yellow`, `white`, `red` |
+| `color` | string | auto | Preset: `cyan`, `green`, `blue`, `magenta`, `yellow`, `white`, `red`. Or any CSS color: `#e06c75`, `rgb(224, 108, 117)`, `hsl(355, 65%, 65%)`, `var(--my-color)`. |
 | `icon` | string \| null | auto | Any [VS Code codicon](https://microsoft.github.io/vscode-codicons/dist/codicon.html) name |
 | `nickname` | string \| null | `null` | Display name shown on tile instead of terminal name |
 | `autoStart` | boolean | `false` | Launch this terminal when VS Code starts |

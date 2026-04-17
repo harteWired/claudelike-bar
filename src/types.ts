@@ -112,9 +112,12 @@ export function getDefaultColor(projectName: string): ThemeGroup {
   return THEME_MAP[projectName] ?? 'white';
 }
 
+const VALID_CSS_COLOR = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d\s,./]+\)|hsla?\([\d\s%,./]+\)|var\(--.+\))$/;
+
 export function getThemeColor(projectName: string, override?: string): string {
-  if (override && COLOR_OVERRIDE_CSS[override]) {
-    return COLOR_OVERRIDE_CSS[override];
+  if (override) {
+    if (COLOR_OVERRIDE_CSS[override]) return COLOR_OVERRIDE_CSS[override];
+    if (VALID_CSS_COLOR.test(override)) return override;
   }
   return THEME_CSS_VARS[getDefaultColor(projectName)];
 }

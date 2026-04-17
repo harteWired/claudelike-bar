@@ -6,7 +6,7 @@ import { ThemeGroup, getDefaultColor, ICON_MAP } from './types';
 import { claudeDir, globalConfigPath, pathIndexPath } from './claudePaths';
 
 export interface TerminalConfig {
-  color: ThemeGroup | 'red';
+  color: ThemeGroup | 'red' | string;
   icon: string | null;
   nickname: string | null;
   autoStart: boolean;
@@ -371,7 +371,7 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   /** Update the color for a terminal in the config file. */
-  setColor(name: string, color: ThemeGroup | 'red' | undefined): void {
+  setColor(name: string, color: string | undefined): void {
     const entry = this.config.terminals[name];
     if (!entry) return;
     entry.color = color ?? getDefaultColor(name);
@@ -563,7 +563,7 @@ export class ConfigManager implements vscode.Disposable {
       '  // \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518',
       '  // New terminals are auto-added here when first opened.',
       '  //',
-      '  // color:     cyan | green | blue | magenta | yellow | white | red',
+      '  // color:     cyan | green | blue | magenta | yellow | white | red | any CSS color (#hex, rgb(), hsl())',
       '  // icon:      any VS Code codicon (calendar, server, notebook, lock, etc.)',
       '  // nickname:  display name override (null = use terminal name)',
       '  // autoStart: true = open this terminal when VS Code starts',

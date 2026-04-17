@@ -27,4 +27,37 @@ describe('getThemeColor', () => {
   it('ignores invalid override and falls back to default', () => {
     expect(getThemeColor('unknown', 'neon-pink')).toBe(THEME_CSS_VARS.white);
   });
+
+  it('passes through hex color values', () => {
+    expect(getThemeColor('unknown', '#e06c75')).toBe('#e06c75');
+  });
+
+  it('passes through 3-digit hex', () => {
+    expect(getThemeColor('unknown', '#f00')).toBe('#f00');
+  });
+
+  it('passes through 8-digit hex (with alpha)', () => {
+    expect(getThemeColor('unknown', '#e06c75cc')).toBe('#e06c75cc');
+  });
+
+  it('passes through rgb()', () => {
+    expect(getThemeColor('unknown', 'rgb(224, 108, 117)')).toBe('rgb(224, 108, 117)');
+  });
+
+  it('passes through rgba()', () => {
+    expect(getThemeColor('unknown', 'rgba(224, 108, 117, 0.8)')).toBe('rgba(224, 108, 117, 0.8)');
+  });
+
+  it('passes through hsl()', () => {
+    expect(getThemeColor('unknown', 'hsl(355, 65%, 65%)')).toBe('hsl(355, 65%, 65%)');
+  });
+
+  it('passes through var() custom properties', () => {
+    expect(getThemeColor('unknown', 'var(--my-custom-color)')).toBe('var(--my-custom-color)');
+  });
+
+  it('rejects non-CSS strings', () => {
+    expect(getThemeColor('unknown', 'alert(1)')).toBe(THEME_CSS_VARS.white);
+    expect(getThemeColor('unknown', 'url(evil)')).toBe(THEME_CSS_VARS.white);
+  });
 });

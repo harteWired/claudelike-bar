@@ -118,18 +118,29 @@ interface WizardState {
   slugAssignments: Map<string, string>;
   colorAssignments: Map<string, ThemeGroup>;
   command: string | null;
+  startFresh: boolean;
+}
+
+interface StepPickResult {
+  folders: string[];
+  startFresh: boolean;
 }
 
 /**
  * Step 1: Pick project folders.
- * Returns selected folder paths, or undefined if cancelled.
+ * Returns selected folder paths + whether to clear existing config.
  */
-async function stepPickFolders(): Promise<string[] | undefined> {
+async function stepPickFolders(hasExistingTerminals: boolean): Promise<StepPickResult | undefined> {
+  const items = [
+    { label: '$(folder-opened) Browse for folders...', value: 'browse' },
+    { label: '$(search) Scan workspace folders', value: 'scan', description: 'immediate children of workspace root' },
+  ];
+  if (hasExistingTerminals) {
+    items.push({ label: '$(refresh) Start fresh', value: 'fresh', description: 'clear existing config and re-pick all projects' });
+  }
+
   const source = await vscode.window.showQuickPick(
-    [
-      { label: '$(folder-opened) Browse for folders...', value: 'browse' },
-      { label: '$(search) Scan workspace folders', value: 'scan', description: 'immediate children of workspace root' },
-    ],
+    items,
     {
       title: 'Set Up Projects (1/5): Choose project folders',
       placeHolder: 'How would you like to add projects?',
@@ -138,16 +149,19 @@ async function stepPickFolders(): Promise<string[] | undefined> {
 
   if (!source) return undefined;
 
-  if (source.value === 'browse') {
+  const startFresh = source.value === 'fresh';
+  const browseOrFresh = source.value === 'browse' || startFresh;
+
+  if (browseOrFresh) {
     const uris = await vscode.window.showOpenDialog({
       canSelectFolders: true,
       canSelectFiles: false,
       canSelectMany: true,
-      title: 'Select project folders',
-      openLabel: 'Add Projects',
+      title: startFresh ? 'Select ALL project folders (existing config will be replaced)' : 'Select project folders',
+      openLabel: startFresh ? 'Replace Config' : 'Add Projects',
     });
     if (!uris || uris.length === 0) return undefined;
-    return uris.map(u => u.fsPath);
+    return { folders: uris.map(u => u.fsPath), startFresh };
   }
 
   // Scan workspace folders
@@ -167,21 +181,21 @@ async function stepPickFolders(): Promise<string[] | undefined> {
     return undefined;
   }
 
-  const items = candidates.map(p => ({
+  const pickItems = candidates.map(p => ({
     label: path.basename(p),
     description: p,
     picked: true,
     value: p,
   }));
 
-  const selected = await vscode.window.showQuickPick(items, {
+  const selected = await vscode.window.showQuickPick(pickItems, {
     title: 'Set Up Projects (1/5): Select projects to add',
     placeHolder: 'Uncheck any you want to skip',
     canPickMany: true,
   });
 
   if (!selected || selected.length === 0) return undefined;
-  return selected.map(s => s.value);
+  return { folders: selected.map(s => s.value), startFresh: false };
 }
 
 /**
@@ -322,14 +336,18 @@ async function stepReview(state: WizardState): Promise<boolean> {
     lines.push(`  ${slug} (${color}) — ${folderPath}`);
   }
 
-  const summary = [
+  const summaryParts = [
     `Ready to configure ${state.folders.length} project(s):`,
     '',
     ...lines,
     '',
     `Command: ${state.command ?? '(none)'}`,
     `Config: ~/.claude/claudelike-bar.jsonc`,
-  ].join('\n');
+  ];
+  if (state.startFresh) {
+    summaryParts.push('(existing terminal entries will be replaced)');
+  }
+  const summary = summaryParts.join('\n');
 
   const confirm = await vscode.window.showQuickPick(
     [
@@ -355,24 +373,28 @@ export async function runSetupWizard(
   log: (msg: string) => void,
 ): Promise<void> {
   // Step 1: Pick folders
-  const folders = await stepPickFolders();
-  if (!folders) {
+  const hasExisting = Object.keys(configManager.getAll()).length > 0;
+  const pickResult = await stepPickFolders(hasExisting);
+  if (!pickResult) {
     log('wizard: cancelled at step 1 (folder selection)');
     return;
   }
+  const { folders, startFresh } = pickResult;
 
-  // Step 2: Confirm slugs
-  const existingSlugs = new Set(Object.keys(configManager.getAll()));
+  // Step 2: Confirm slugs — start-fresh ignores existing slugs
+  const existingSlugs = startFresh ? new Set<string>() : new Set(Object.keys(configManager.getAll()));
   const slugAssignments = await stepConfirmSlugs(folders, existingSlugs);
   if (!slugAssignments) {
     log('wizard: cancelled at step 2 (slug assignment)');
     return;
   }
 
-  // Step 3: Assign colors
+  // Step 3: Assign colors — start-fresh ignores existing colors
   const existingColors = new Map<string, ThemeGroup | 'red'>();
-  for (const [name, cfg] of Object.entries(configManager.getAll())) {
-    existingColors.set(name, cfg.color);
+  if (!startFresh) {
+    for (const [name, cfg] of Object.entries(configManager.getAll())) {
+      existingColors.set(name, cfg.color);
+    }
   }
   const colorAssignments = await stepAssignColors(slugAssignments, existingColors);
   if (!colorAssignments) {
@@ -388,11 +410,17 @@ export async function runSetupWizard(
   }
 
   // Step 5: Review
-  const state: WizardState = { folders, slugAssignments, colorAssignments, command };
+  const state: WizardState = { folders, slugAssignments, colorAssignments, command, startFresh };
   const confirmed = await stepReview(state);
   if (!confirmed) {
     log('wizard: cancelled at step 5 (review)');
     return;
+  }
+
+  // Clear existing terminals if starting fresh
+  if (startFresh) {
+    configManager.clearTerminals();
+    log('wizard: cleared existing terminal entries (start fresh)');
   }
 
   // Build entries and write to config

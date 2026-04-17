@@ -298,6 +298,13 @@ export class ConfigManager implements vscode.Disposable {
     return { ...this.config.terminals };
   }
 
+  /** Remove all terminal entries from the config. Used by the wizard's "Start fresh" flow.
+   * Writes synchronously to disk so the read-merge-write in save() doesn't resurrect old entries. */
+  clearTerminals(): void {
+    this.config.terminals = {};
+    this.save();
+  }
+
   /** Get terminals marked for auto-start. */
   getAutoStartTerminals(): string[] {
     return Object.entries(this.config.terminals)

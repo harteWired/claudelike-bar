@@ -331,4 +331,66 @@ describe('runSetupWizard', () => {
     expect(all['beta']).toBeDefined();
     expect(all['alpha'].color).not.toBe(all['beta'].color);
   });
+
+  it('start fresh clears existing entries and replaces with new ones', async () => {
+    const log = vi.fn();
+    const cm = await makeConfigManager();
+
+    // Pre-populate with stale entries
+    cm.addProjectEntry('stale-project', {
+      path: '/old/stale',
+      command: 'claude',
+      color: 'red',
+      icon: null,
+      nickname: null,
+      autoStart: true,
+    });
+    expect(Object.keys(cm.getAll())).toContain('stale-project');
+
+    const newDir = path.join(tmpDir, 'fresh-project');
+    fs.mkdirSync(newDir);
+
+    // Step 1: start fresh → browse
+    window.showQuickPick.mockResolvedValueOnce({ label: 'Start fresh', value: 'fresh' });
+    window.showOpenDialog.mockResolvedValueOnce([{ fsPath: newDir }]);
+    // Step 2: accept
+    window.showQuickPick.mockResolvedValueOnce({ label: 'Accept', value: 'accept' });
+    // Step 3: auto colors
+    window.showQuickPick.mockResolvedValueOnce({ label: 'Auto', value: 'auto' });
+    // Step 4: claude
+    window.showQuickPick.mockResolvedValueOnce({ label: 'claude', value: 'claude' });
+    // Step 5: confirm
+    window.showQuickPick.mockResolvedValueOnce({ label: 'Confirm', value: 'confirm' });
+
+    await runSetupWizard(cm, '/ext', log);
+
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('cleared existing'));
+    const all = cm.getAll();
+    expect(Object.keys(all)).not.toContain('stale-project');
+    expect(all['fresh-project']).toBeDefined();
+    expect(all['fresh-project'].path).toBe(newDir);
+  });
+
+  it('start fresh option not shown when config has no terminals', async () => {
+    const log = vi.fn();
+    const projectDir = path.join(tmpDir, 'new-project');
+    fs.mkdirSync(projectDir);
+
+    // Step 1: no "fresh" option — browse directly
+    window.showQuickPick.mockResolvedValueOnce({ label: 'Browse', value: 'browse' });
+    window.showOpenDialog.mockResolvedValueOnce([{ fsPath: projectDir }]);
+    // Step 2-5
+    window.showQuickPick.mockResolvedValueOnce({ label: 'Accept', value: 'accept' });
+    window.showQuickPick.mockResolvedValueOnce({ label: 'Auto', value: 'auto' });
+    window.showQuickPick.mockResolvedValueOnce({ label: 'claude', value: 'claude' });
+    window.showQuickPick.mockResolvedValueOnce({ label: 'Confirm', value: 'confirm' });
+
+    const cm = await makeConfigManager();
+    await runSetupWizard(cm, '/ext', log);
+
+    // Verify the first showQuickPick was called with only 2 items (no "Start fresh")
+    const firstCallItems = window.showQuickPick.mock.calls[0][0];
+    expect(firstCallItems).toHaveLength(2);
+    expect(firstCallItems.map((i: any) => i.value)).not.toContain('fresh');
+  });
 });

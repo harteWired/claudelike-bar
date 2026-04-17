@@ -13,9 +13,11 @@ import {
 import { executeRegisterProjectCommand } from './registerProject';
 import { showOnboardingNotification, isSetupComplete } from './onboarding';
 import { runSetupWizard } from './wizard';
+import { readExtensionVersion } from './claudePaths';
 import * as path from 'path';
 
 const SETUP_PROMPTED_KEY = 'claudelike-bar.setupPrompted';
+const LAST_VERSION_KEY = 'claudelike-bar.lastVersion';
 
 const STATUS_DIR = getStatusDir();
 const DEBUG_FLAG = path.join(STATUS_DIR, '.debug');
@@ -113,6 +115,24 @@ export function activate(context: vscode.ExtensionContext) {
       (err) => log(`onboarding notification failed: ${err instanceof Error ? err.message : err}`),
     );
   }
+
+  // Version-upgrade notification: if the extension version changed since last
+  // activation, offer to re-run the setup wizard. Covers users who upgraded
+  // and have stale terminal entries from an older config format.
+  const currentVersion = readExtensionVersion(context.extensionPath);
+  const lastVersion = context.globalState.get<string>(LAST_VERSION_KEY);
+  if (lastVersion && lastVersion !== currentVersion && isSetupComplete()) {
+    vscode.window.showInformationMessage(
+      `Claudelike Bar updated to v${currentVersion}. Re-configure your projects?`,
+      'Set Up Projects',
+      'Dismiss',
+    ).then((pick) => {
+      if (pick === 'Set Up Projects') {
+        runSetupWizard(configManager, context.extensionPath, (m) => log(m));
+      }
+    });
+  }
+  context.globalState.update(LAST_VERSION_KEY, currentVersion);
 
   // Handle webview messages
   provider.onMessage = (message) => {

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { ThemeGroup, getDefaultColor, ICON_MAP } from './types';
-import { claudeDir, globalConfigPath } from './claudePaths';
+import { claudeDir, globalConfigPath, pathIndexPath } from './claudePaths';
 
 export interface TerminalConfig {
   color: ThemeGroup | 'red';
@@ -473,6 +473,7 @@ export class ConfigManager implements vscode.Disposable {
       fs.mkdirSync(path.dirname(this.configPath), { recursive: true });
       fs.writeFileSync(this.configPath, output, 'utf-8');
       this.hasShownWriteError = false;
+      this.writePathIndex();
     } catch (err) {
       console.error('claudelike-bar: failed to write config', err);
       if (!this.hasShownWriteError) {
@@ -577,6 +578,28 @@ export class ConfigManager implements vscode.Disposable {
     ];
 
     return lines.join('\n');
+  }
+
+  /**
+   * Write a lightweight path → slug index that the hook reads to resolve
+   * manual terminals (those without CLAUDELIKE_BAR_NAME env var).
+   */
+  private writePathIndex(): void {
+    const index: Record<string, string> = {};
+    for (const [slug, cfg] of Object.entries(this.config.terminals)) {
+      if (cfg.path && typeof cfg.path === 'string') {
+        const normalized = cfg.path.replace(/[/\\]+$/, '') || cfg.path;
+        index[normalized] = slug;
+      }
+    }
+    const dest = pathIndexPath();
+    const tmp = `${dest}.tmp.${process.pid}`;
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(index) + '\n');
+      fs.renameSync(tmp, dest);
+    } catch {
+      try { fs.unlinkSync(tmp); } catch {}
+    }
   }
 
   dispose(): void {

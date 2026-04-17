@@ -111,7 +111,43 @@
           "group": "navigation"
         }
       ]
-    }
+    },
+    "walkthroughs": [
+      {
+        "id": "claudelike-bar.getStarted",
+        "title": "Get Started with Claudelike Bar",
+        "description": "Set up live status tiles for your Claude Code terminals.",
+        "steps": [
+          {
+            "id": "welcome",
+            "title": "What is Claudelike Bar?",
+            "description": "A sidebar that shows live status tiles for every Claude Code terminal — working, ready for input, waiting, or done. Each tile is color-coded and shows context window usage.\n\n[Open the Sidebar](command:claudeDashboard.mainView.focus)",
+            "media": {
+              "altText": "Claudelike Bar sidebar with colored status tiles",
+              "image": "media/dashboard.svg"
+            }
+          },
+          {
+            "id": "setupProjects",
+            "title": "Set Up Your Projects",
+            "description": "Run the setup wizard to register your project folders. The wizard assigns names, colors, and startup commands.\n\n[Run Setup Wizard](command:claudeDashboard.setupProjects)",
+            "media": {
+              "altText": "Setup wizard picking project folders",
+              "image": "media/dashboard.svg"
+            }
+          },
+          {
+            "id": "customize",
+            "title": "Customize Your Config",
+            "description": "Open the config file to tweak colors, nicknames, personality mode, and per-terminal commands. Changes are picked up live.\n\n[Open Config](command:claudeDashboard.openConfig)",
+            "media": {
+              "altText": "Config file with terminal entries",
+              "image": "media/dashboard.svg"
+            }
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --format=cjs --main-fields=module,main",

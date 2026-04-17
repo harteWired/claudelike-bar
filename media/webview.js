@@ -45,8 +45,15 @@ document.addEventListener('keydown', (e) => {
  */
 function diffUpdate(tiles) {
   if (!tiles || tiles.length === 0) {
-    if (container.querySelector('.empty-state')) return; // already showing empty
-    container.innerHTML = '<div class="empty-state">No terminals open</div>';
+    if (container.querySelector('.empty-state')) return;
+    container.innerHTML = '';
+    const empty = document.createElement('div');
+    empty.className = 'empty-state';
+    empty.innerHTML = 'No terminals open<br><button class="add-project-btn">+ Add Project</button>';
+    empty.querySelector('.add-project-btn').addEventListener('click', () => {
+      vscode.postMessage({ type: 'addProject' });
+    });
+    container.appendChild(empty);
     selectedIndex = -1;
     return;
   }

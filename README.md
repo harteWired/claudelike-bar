@@ -91,13 +91,25 @@ On Windows, prefix the command with `node` so it doesn't depend on shebang inter
 
 **4. Reload VS Code** — `Cmd+Shift+P` → "Reload Window"
 
-### After install: let Claude walk you through setup
+### After install: set up your projects
 
-Once the extension is running, the fastest way to get it feeling *yours* is to open a Claude Code terminal and say:
+**Option A — Setup Wizard** (recommended for new users):
+
+`Cmd+Shift+P` → "Claudelike Bar: Set Up Projects"
+
+The wizard walks you through 5 steps: pick your project folders, confirm names, assign colors, choose a startup command, and review. Your projects auto-start on the next VS Code launch.
+
+**Option B — Let Claude do it:**
+
+Open a Claude Code terminal and say:
 
 > *"Walk me through configuring the Claudelike Bar."*
 
-Claude will read `.claudelike-bar.jsonc`, ask what projects you care about, set up auto-start commands, pick a personality mode, assign colors, decide between auto-sort and manual-sort, and nudge you to drag the tiles into whatever order you want. It's the same config file documented below — but you don't have to read it.
+Claude will read `~/.claude/claudelike-bar.jsonc`, ask what projects you care about, set up auto-start commands, pick a personality mode, assign colors, and nudge you to drag the tiles into order.
+
+**Option C — Edit the config directly:**
+
+`Cmd+Shift+P` → "Claudelike Bar: Open Config" — the JSONC file is documented with inline comments.
 
 ## Features
 
@@ -121,7 +133,9 @@ Claude will read `.claudelike-bar.jsonc`, ask what projects you care about, set 
 ```
 Claude Code hooks fire on events
          ↓
-dashboard-status.js writes JSON → {os.tmpdir()}/claude-dashboard/{project}.json
+dashboard-status.js derives slug (env var → path index → basename)
+         ↓
+Writes JSON → {os.tmpdir()}/claude-dashboard/{slug}.json
          ↓
 VS Code FileSystemWatcher picks it up
          ↓

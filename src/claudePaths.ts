@@ -13,6 +13,7 @@ export function claudeDir(): string { return path.join(os.homedir(), '.claude');
 export function hooksDir(): string { return path.join(claudeDir(), 'hooks'); }
 export function settingsPath(): string { return path.join(claudeDir(), 'settings.json'); }
 export function globalConfigPath(): string { return path.join(claudeDir(), 'claudelike-bar.jsonc'); }
+export function pathIndexPath(): string { return path.join(claudeDir(), 'claudelike-bar-paths.json'); }
 
 /**
  * Write a JSON settings object atomically via temp file + rename.

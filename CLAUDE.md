@@ -9,11 +9,12 @@ Run `./setup.sh` — it handles everything (hook script, settings.json merge, bu
 ## Architecture
 
 ```
-Claude Code hooks (4 events: PreToolUse, UserPromptSubmit, Stop, Notification)
+Claude Code hooks (14 events: PreToolUse, UserPromptSubmit, Stop, Notification, ...)
     → ~/.claude/hooks/dashboard-status.js  (Node.js, zero deps)
-    → writes JSON to {os.tmpdir()}/claude-dashboard/{project}.json
+    → derives project slug: $CLAUDELIKE_BAR_NAME → path index → basename(cwd)
+    → writes JSON to {os.tmpdir()}/claude-dashboard/{slug}.json
     → VS Code FileSystemWatcher picks it up
-    → TerminalTracker matches project to tile (3-tier: exact / projectName alias / normalized)
+    → TerminalTracker matches project to tile (4-tier: exact slug / path / projectName alias / normalized)
     → sidebar tiles update
 ```
 
@@ -29,6 +30,11 @@ src/
   statusWatcher.ts      — watches {os.tmpdir()}/claude-dashboard/*.json
   statusDir.ts          — cross-platform status dir resolution (used by hook + extension)
   dashboardProvider.ts  — webview sidebar
+  wizard.ts             — setup wizard (5-step QuickPick flow)
+  registerProject.ts    — single-project registration command
+  slug.ts               — collision-resistant slug derivation
+  claudePaths.ts        — cross-platform ~/.claude/ path helpers
+  onboarding.ts         — first-run orchestration
   types.ts              — shared types, theme/icon maps
 media/
   webview.js            — tile rendering (vanilla JS, DOM diffing)
@@ -45,14 +51,16 @@ scripts/
 
 ### Config file
 
-`.claudelike-bar.jsonc` in the workspace root. JSONC (JSON with comments). Auto-created on first terminal open. Template-based write preserves section headers.
+`~/.claude/claudelike-bar.jsonc` — user-global, single file across all workspaces. JSONC (JSON with comments). Auto-created on first terminal open or via the setup wizard. Template-based write preserves section headers. Workspace-local files are auto-migrated on first load.
+
+A companion path index (`~/.claude/claudelike-bar-paths.json`) maps `path → slug` for the hook script to resolve manual terminals without CLAUDELIKE_BAR_NAME.
 
 Key settings:
 - `mode`: `"chill"` or `"passive-aggressive"` — personality mode
 - `labels`: custom status text
 - `contextThresholds`: warn/crit percentages for context window
 - `ignoredTexts`: passive-aggressive mode messages
-- `terminals`: per-project color, icon, nickname, autoStart
+- `terminals`: per-project `path`, `cwd`, `command`, `color`, `icon`, `nickname`, `autoStart`
 
 ### Build
 

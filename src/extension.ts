@@ -147,6 +147,10 @@ export function activate(context: vscode.ExtensionContext) {
       case 'setColor':
         tracker.setColor(message.id, message.color ?? undefined);
         break;
+
+      case 'addProject':
+        vscode.commands.executeCommand('claudeDashboard.registerProject');
+        break;
     }
   };
 

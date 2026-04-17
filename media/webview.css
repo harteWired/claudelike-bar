@@ -24,6 +24,22 @@ body {
   text-align: center;
   padding: 24px 12px;
   font-size: 12px;
+  line-height: 1.8;
+}
+
+.add-project-btn {
+  margin-top: 8px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.add-project-btn:hover {
+  background: var(--vscode-button-hoverBackground);
 }
 
 /* Tile */

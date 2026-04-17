@@ -92,7 +92,22 @@ function main() {
   if (!cwd) cwd = process.cwd();
 
   // Derive project name
+  //   1. CLAUDELIKE_BAR_NAME env var (auto-started terminals)
+  //   2. Path index lookup (manual terminals with registered path)
+  //   3. basename(cwd) fallback
   let project = process.env.CLAUDELIKE_BAR_NAME || '';
+  if (!project) {
+    try {
+      const indexPath = path.join(os.homedir(), '.claude', 'claudelike-bar-paths.json');
+      const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+      if (typeof index === 'object' && index !== null) {
+        const normalizedCwd = cwd.replace(/[/\\]+$/, '') || cwd;
+        project = index[normalizedCwd] || index[cwd] || '';
+      }
+    } catch {
+      // No index or parse error — fall through to basename
+    }
+  }
   if (!project) {
     project = path.basename(cwd);
   }

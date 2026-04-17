@@ -38,7 +38,7 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
     (vscode.workspace as any).workspaceFolders = [
       { uri: (vscode.Uri as any).file(tmpWorkspace), name: 'test', index: 0 },
     ];
-    cm = new ConfigManager();
+    cm = new ConfigManager(path.join(tmpWorkspace, '.claudelike-bar.jsonc'));
     return cm;
   }
 

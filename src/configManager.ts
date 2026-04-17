@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { ThemeGroup, getDefaultColor, ICON_MAP } from './types';
+import { claudeDir, globalConfigPath } from './claudePaths';
 
 export interface TerminalConfig {
   color: ThemeGroup | 'red';
@@ -121,7 +122,6 @@ const DEFAULT_CONTEXT_THRESHOLDS: ContextThresholds = { warn: 30, crit: 50 };
 export class ConfigManager implements vscode.Disposable {
   private config: ConfigFile = { terminals: {} };
   private configPath: string;
-  private legacyConfigPath: string;
   private watcher: vscode.FileSystemWatcher | undefined;
   private disposables: vscode.Disposable[] = [];
   private onChangeEmitter = new vscode.EventEmitter<void>();
@@ -132,12 +132,11 @@ export class ConfigManager implements vscode.Disposable {
   private hasShownWriteError = false;
   private mergedLabels: Record<string, string> = { ...DEFAULT_LABELS };
 
-  constructor() {
-    // Place config in workspace root
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    const root = workspaceFolders?.[0]?.uri.fsPath ?? '/workspace';
-    this.configPath = path.join(root, CONFIG_FILENAME);
-    this.legacyConfigPath = path.join(root, LEGACY_CONFIG_FILENAME);
+  constructor(configPathOverride?: string) {
+    // v0.10.1 — config lives at ~/.claude/claudelike-bar.jsonc (user-global).
+    // Workspace-local files are checked only for one-time migration.
+    // configPathOverride is for testing only — lets tests point at a temp dir.
+    this.configPath = configPathOverride ?? globalConfigPath();
 
     this.load();
     this.setupWatcher();
@@ -145,27 +144,37 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   private load(): void {
-    // Try new JSONC file first
+    // 1. Try the global config first (the primary location).
     if (fs.existsSync(this.configPath)) {
       this.loadFrom(this.configPath);
       this.migrateCdCommands();
       return;
     }
 
-    // Migrate legacy JSON file if it exists
-    if (fs.existsSync(this.legacyConfigPath)) {
-      this.loadFrom(this.legacyConfigPath);
-      // Write in new format and remove old file
-      this.save();
-      try {
-        fs.unlinkSync(this.legacyConfigPath);
-      } catch {
-        // Best-effort cleanup
+    // 2. No global config — check for a workspace-local file to migrate.
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders) {
+      const root = workspaceFolders[0].uri.fsPath;
+      const candidates = [
+        path.join(root, CONFIG_FILENAME),
+        path.join(root, LEGACY_CONFIG_FILENAME),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          this.loadFrom(candidate);
+          this.migrateCdCommands();
+          // Copy to global location so subsequent loads go through path 1.
+          fs.mkdirSync(claudeDir(), { recursive: true });
+          this.save();
+          vscode.window.showInformationMessage(
+            `Claudelike Bar: migrated config to ${this.configPath}. The workspace file is no longer used.`,
+          );
+          return;
+        }
       }
-      return;
     }
 
-    // No config file — start fresh
+    // 3. No config file anywhere — start fresh.
   }
 
   private loadFrom(filePath: string): void {
@@ -208,7 +217,8 @@ export class ConfigManager implements vscode.Disposable {
 
   private setupWatcher(): void {
     const dir = path.dirname(this.configPath);
-    const pattern = new vscode.RelativePattern(vscode.Uri.file(dir), CONFIG_FILENAME);
+    const filename = path.basename(this.configPath);
+    const pattern = new vscode.RelativePattern(vscode.Uri.file(dir), filename);
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
     const reload = () => {
@@ -422,11 +432,45 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   private save(): void {
+    // Clear any pending debounce — if save() is called explicitly (e.g.,
+    // during migration) while a debounced write is pending, the debounce
+    // would fire 200ms later and produce a redundant write.
+    if (this.writeDebounce) {
+      clearTimeout(this.writeDebounce);
+      this.writeDebounce = undefined;
+    }
+    // Read-merge-write: re-read the file from disk before writing so that
+    // concurrent changes from another VS Code window (e.g., ensureEntry
+    // from a different workspace) aren't lost. Merge our in-memory terminal
+    // entries over the disk state — our changes win on conflict, but
+    // terminals we don't know about are preserved.
+    // NOTE: only terminal entries are merged. Top-level scalar keys (mode,
+    // sortMode, labels, etc.) use last-writer-wins — the race window is
+    // narrow (between another window's write and our watcher reload) and
+    // scalar config changes are rare enough that full merge isn't justified.
+    try {
+      if (fs.existsSync(this.configPath)) {
+        const diskContent = fs.readFileSync(this.configPath, 'utf-8');
+        const diskConfig = parseJsonc(diskContent);
+        if (diskConfig && typeof diskConfig.terminals === 'object') {
+          // Merge: disk terminals we don't have get added to ours.
+          for (const [key, val] of Object.entries(diskConfig.terminals)) {
+            if (!this.config.terminals[key]) {
+              this.config.terminals[key] = val as TerminalConfig;
+            }
+          }
+        }
+      }
+    } catch {
+      // Disk read failed — proceed with in-memory state only.
+    }
+
     const output = this.generateConfigText();
 
     this.isSaving = true;
     if (this.isSavingTimer) clearTimeout(this.isSavingTimer);
     try {
+      fs.mkdirSync(path.dirname(this.configPath), { recursive: true });
       fs.writeFileSync(this.configPath, output, 'utf-8');
       this.hasShownWriteError = false;
     } catch (err) {
@@ -436,7 +480,6 @@ export class ConfigManager implements vscode.Disposable {
         vscode.window.showErrorMessage(`Claudelike Bar: failed to save config — ${err instanceof Error ? err.message : err}`);
       }
     } finally {
-      // Clear the flag after a short delay to outlast the watcher event
       this.isSavingTimer = setTimeout(() => { this.isSaving = false; this.isSavingTimer = undefined; }, 100);
     }
   }

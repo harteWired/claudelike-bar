@@ -39,7 +39,7 @@ describe('TerminalTracker state machine', () => {
     writeConfig({ terminals: {} });
     // Add a terminal before constructing tracker (it scans window.terminals)
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -184,7 +184,7 @@ describe('TerminalTracker name matching (3-tier)', () => {
     __resetMock();
     writeConfig({ terminals: {} });
     addMockTerminal('backend');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
 
     tracker.updateStatus('backend', 'working', 'PreToolUse');
@@ -206,7 +206,7 @@ describe('TerminalTracker name matching (3-tier)', () => {
       },
     });
     addMockTerminal('VS Code Enhancement');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
 
     tracker.updateStatus('vscode-enhancement', 'working', 'PreToolUse');
@@ -218,7 +218,7 @@ describe('TerminalTracker name matching (3-tier)', () => {
     __resetMock();
     writeConfig({ terminals: {} });
     addMockTerminal('VS Code Enhancement');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
 
     tracker.updateStatus('vscode-enhancement', 'working', 'PreToolUse');
@@ -232,7 +232,7 @@ describe('TerminalTracker name matching (3-tier)', () => {
     // Two terminals: one exact match, one that would normalize-match
     addMockTerminal('myapi');
     addMockTerminal('my-api');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
 
     // Incoming project "my-api" — should match the tile literally named "my-api"
@@ -258,7 +258,7 @@ describe('TerminalTracker name matching (3-tier)', () => {
       },
     });
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
 
     // Status for "myproject" would normally Tier-3 match "my-project",
@@ -272,7 +272,7 @@ describe('TerminalTracker name matching (3-tier)', () => {
     __resetMock();
     writeConfig({ terminals: {} });
     addMockTerminal('VS Code Enhancement');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
 
     tracker.updateContext('vscode-enhancement', 55);
@@ -293,7 +293,7 @@ describe('TerminalTracker v0.9 — multi-agent state', () => {
     __resetMock();
     writeConfig({ terminals: {} });
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -493,7 +493,7 @@ describe('TerminalTracker v0.9 — multi-agent state', () => {
     addMockTerminal('working-proj');
     addMockTerminal('error-proj');
     addMockTerminal('ready-proj');
-    const c = new ConfigManager();
+    const c = new ConfigManager(CONFIG_PATH);
     const t = new TerminalTracker(c);
     try {
       t.updateStatus('working-proj', 'working', 'UserPromptSubmit');
@@ -522,7 +522,7 @@ describe('TerminalTracker v0.9.1 — session / tool-failure / compaction', () =>
     __resetMock();
     writeConfig({ terminals: {} });
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -591,7 +591,7 @@ describe('TerminalTracker v0.9.1 — session / tool-failure / compaction', () =>
     writeConfig({ terminals: {} });
     addMockTerminal('idle-proj');
     addMockTerminal('offline-proj');
-    const c = new ConfigManager();
+    const c = new ConfigManager(CONFIG_PATH);
     const t = new TerminalTracker(c);
     try {
       t.updateStatus('offline-proj', 'session_end', 'SessionEnd', undefined, { reason: 'logout' });

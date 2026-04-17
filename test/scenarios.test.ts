@@ -51,7 +51,7 @@ function setupScenarioTracker(configOverrides: Record<string, any> = {}) {
   ];
   writeConfig({ terminals: {}, ...configOverrides });
   const term = addMockTerminal('my-project');
-  const config = new ConfigManager();
+  const config = new ConfigManager(CONFIG_PATH);
   const tracker = new TerminalTracker(config);
   const tile = () => tracker.getTiles().find(t => t.name === 'my-project')!;
   const dispose = () => {
@@ -85,7 +85,7 @@ describe('v0.10 scenario: path-based matching', () => {
     });
     addMockTerminal('client-api');
     addMockTerminal('personal-api');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -136,7 +136,7 @@ describe('v0.9.3 scenario: permission approval flow (F1 + F3)', () => {
     ];
     writeConfig({ terminals: {} });
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -242,7 +242,7 @@ describe('v0.9.3 scenario: stale notification_type leak (F2)', () => {
     ];
     writeConfig({ terminals: {} });
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -296,7 +296,7 @@ describe('v0.9.3 scenario: focus-loss on ready tile (F4)', () => {
     ];
     writeConfig({ terminals: {}, mode: 'passive-aggressive' });
     term = addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -359,7 +359,7 @@ describe('v0.9.3 scenario: SessionStart reset (F5)', () => {
     ];
     writeConfig({ terminals: {} });
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -446,7 +446,7 @@ describe('v0.9.3 scenario: subagent permission prompt (F6)', () => {
     ];
     writeConfig({ terminals: {} });
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 
@@ -586,7 +586,7 @@ describe('v0.9.3 scenario: PostToolUse with tool failure flag (F1 edge case)', (
     ];
     writeConfig({ terminals: {} });
     addMockTerminal('my-project');
-    config = new ConfigManager();
+    config = new ConfigManager(CONFIG_PATH);
     tracker = new TerminalTracker(config);
   });
 

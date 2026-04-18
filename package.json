@@ -2,7 +2,7 @@
   "name": "claudelike-bar",
   "displayName": "Claudelike Bar",
   "description": "Sidebar dashboard with live status tiles for Claude Code terminal sessions",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "publisher": "aes87",
   "repository": {
     "type": "git",
@@ -40,6 +40,10 @@
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
+  "extensionKind": [
+    "workspace",
+    "ui"
+  ],
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": "limited",

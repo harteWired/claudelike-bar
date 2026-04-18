@@ -408,7 +408,7 @@
 
 <div class="container">
 
-  <h1>Claudelike Bar <span style="color: var(--vscode-descriptionForeground); font-weight: 400;">— v0.13.2</span></h1>
+  <h1>Claudelike Bar <span style="color: var(--vscode-descriptionForeground); font-weight: 400;">— v0.13.3</span></h1>
   <p class="tagline">Live status tiles for every Claude Code terminal. <a href="https://github.com/aes87/claudelike-bar">github.com/aes87/claudelike-bar</a> · <a href="https://open-vsx.org/extension/aes87/claudelike-bar">Open VSX</a></p>
 
   <!-- =============================================================== -->
@@ -558,6 +558,11 @@
   <!-- =============================================================== -->
 
   <div class="feature-row">
+
+    <div class="feature-card">
+      <h3>WSL2 / SSH / Dev Containers / Codespaces <span class="badge">v0.13.3</span></h3>
+      <p>The extension now declares <code>extensionKind: ["workspace", "ui"]</code> — VS Code runs the Node.js side of the extension on the same host as Claude Code, so hooks register to the right <code>~/.claude/settings.json</code>, status files land in the same <code>os.tmpdir()</code> the extension watches, and the config is one file (not two ships passing in the night). Local-only setups fall through to the <code>"ui"</code> kind and behave exactly as before.</p>
+    </div>
 
     <div class="feature-card">
       <h3>Audio alerts <span class="badge">v0.12</span></h3>

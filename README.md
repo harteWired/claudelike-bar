@@ -132,6 +132,7 @@ Claude will read `~/.claude/claudelike-bar.jsonc`, ask what projects you care ab
 - **Keyboard nav** — arrow keys / j/k, Enter to switch
 - **Debug log** — toggle on to trace every hook event and state transition
 - **Cross-platform** — Windows, macOS, Linux; PowerShell, bash, zsh, fish
+- **Remote development** — runs on the workspace side in WSL2, SSH Remote, Dev Containers, and Codespaces, so hooks/config/status files all line up with where Claude Code actually lives *(v0.13.3)*
 - **Audio alerts** — optional chime when Claude finishes, optional second sound for permission prompts; bring your own clips *(v0.12)*
 - **Auto-start safety** — entries with missing `cwd` are skipped with a single summary toast instead of N modal errors *(v0.13.1)*
 - **"Switch to auto sort"** — when in manual mode, right-click any tile to flip back to status-based sort *(v0.13.1)*

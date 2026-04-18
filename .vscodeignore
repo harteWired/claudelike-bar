@@ -13,7 +13,9 @@ hooks/*.sh
 index.html
 package-lock.json
 test/**
+test/integration/out/**
 vitest.config.ts
 .github/**
+.vscode-test/**
 docs/sessions/**
 docs/launch-strategy.md

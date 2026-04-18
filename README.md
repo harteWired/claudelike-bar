@@ -132,6 +132,35 @@ Claude will read `~/.claude/claudelike-bar.jsonc`, ask what projects you care ab
 - **Keyboard nav** — arrow keys / j/k, Enter to switch
 - **Debug log** — toggle on to trace every hook event and state transition
 - **Cross-platform** — Windows, macOS, Linux; PowerShell, bash, zsh, fish
+- **Audio alerts** — optional chime when Claude finishes, optional second sound for permission prompts; bring your own clips *(v0.12)*
+
+## Audio
+
+Optional sound when Claude is waiting on you. Off by default; drop your own
+MP3/WAV/OGG files into `~/.claude/sounds/` and point the config at them.
+Two slots — one for end-of-turn, one (optional) for mid-job permission
+prompts — so you can tell "done" apart from "blocked on approval" by ear.
+
+Quick setup:
+
+1. `Cmd+Shift+P` → **Claudelike Bar: Open Sounds Folder** (creates the
+   folder and drops a README in if it's empty).
+2. Put one or two short clips in — Mixkit, Pixabay, and Freesound all have
+   CC0 options. Filenames: letters, digits, dot, dash, underscore only.
+3. Edit `~/.claude/claudelike-bar.jsonc`:
+   ```jsonc
+   "audio": {
+     "enabled": true,
+     "volume": 0.6,
+     "sounds": { "ready": "chime.mp3", "permission": "ping.mp3" }
+   }
+   ```
+4. Or flip the switch without editing: `Cmd+Shift+P` → **Claudelike Bar:
+   Toggle Audio**, or right-click any tile → **Unmute Audio**.
+
+Focused tiles don't ding — you're already looking at them. Simultaneous
+finishes on multiple tiles coalesce into one sound. See
+[`docs/audio-setup.md`](docs/audio-setup.md) for the full guide.
 
 ## How It Works
 
@@ -173,6 +202,8 @@ All commands are available from the command palette (`Cmd+Shift+P` / `Ctrl+Shift
 | **Install Statusline** | Installs the optional context % statusline script. Prompts before replacing an existing statusline. |
 | **Restore Previous Statusline** | Puts back the statusline that was replaced by "Install Statusline", from the backup file. |
 | **Show Me the Hooks** | Opens the hooks documentation in your browser — see exactly what gets written before installing. |
+| **Toggle Audio** | Flips `audio.enabled` in the config. Also wired to the tile context menu as "Mute Audio" / "Unmute Audio". |
+| **Open Sounds Folder** | Opens `~/.claude/sounds/` in your OS file manager. Creates the folder and a README on first call if it's empty. |
 
 ## How to Configure
 

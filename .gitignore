@@ -1,3 +1,9 @@
 node_modules/
 dist/
 *.vsix
+test/integration/out/
+.vscode-test/
+
+# Session logs are local-only scratch for /resume across conversations —
+# never committed/pushed. See memory/feedback_session_logs_in_repos.md.
+docs/sessions/

@@ -4,6 +4,7 @@ import { DashboardProvider } from './dashboardProvider';
 import { TerminalTracker } from './terminalTracker';
 import { StatusWatcher } from './statusWatcher';
 import { ConfigManager } from './configManager';
+import { AudioPlayer } from './audio';
 import { getStatusDir } from './statusDir';
 import { executeHooksInstallCommand, HOOKS_DOC_URL } from './setup';
 import {
@@ -13,7 +14,8 @@ import {
 import { executeRegisterProjectCommand } from './registerProject';
 import { showOnboardingNotification, isSetupComplete } from './onboarding';
 import { runSetupWizard } from './wizard';
-import { readExtensionVersion } from './claudePaths';
+import { readExtensionVersion, soundsDir } from './claudePaths';
+import { ensureSoundsDirWithReadme } from './soundsReadme';
 import * as path from 'path';
 
 const SETUP_PROMPTED_KEY = 'claudelike-bar.setupPrompted';
@@ -99,6 +101,80 @@ export function activate(context: vscode.ExtensionContext) {
     () => vscode.env.openExternal(vscode.Uri.parse(HOOKS_DOC_URL)),
   );
 
+  // Refresh tiles on terminal changes. Declared early so audio commands
+  // below can call it. The audioEnabled flag rides along so the webview
+  // context menu can label the toggle "Mute" vs "Unmute" without a separate
+  // round-trip.
+  const refreshTiles = () => {
+    const tiles = tracker.getTiles();
+    provider.updateTiles(tiles, configManager.isAudioEnabled());
+  };
+
+  // v0.12 — audio commands.
+  const toggleAudioCmd = vscode.commands.registerCommand(
+    'claudeDashboard.toggleAudio',
+    () => {
+      // Write the README first so the toast text can mention it confidently.
+      try {
+        ensureSoundsDirWithReadme();
+      } catch (err) {
+        log(() => `toggle-audio: ensureSoundsDirWithReadme failed — ${err instanceof Error ? err.message : String(err)}`);
+      }
+      const next = !configManager.isAudioEnabled();
+      configManager.setAudioEnabled(next);
+      refreshTiles(); // push new audioEnabled state to the webview menu label
+      if (next) {
+        vscode.window.showInformationMessage(
+          'Audio alerts enabled — sound on job completion. Open the Claudelike Bar sidebar at least once per session for audio.',
+        );
+      } else {
+        vscode.window.showInformationMessage('Audio alerts muted');
+      }
+    },
+  );
+  const openSoundsFolderCmd = vscode.commands.registerCommand(
+    'claudeDashboard.openSoundsFolder',
+    async () => {
+      try {
+        ensureSoundsDirWithReadme();
+      } catch (err) {
+        vscode.window.showErrorMessage(`Claudelike Bar: couldn't create sounds folder — ${err instanceof Error ? err.message : err}`);
+        return;
+      }
+      await vscode.env.openExternal(vscode.Uri.file(soundsDir()));
+    },
+  );
+
+  // v0.12 — private test hook. Fires a play for `filename` and resolves
+  // with the webview's ack: 'played' (audio.play resolved), 'error' (it
+  // rejected — autoplay blocked or decode failed), or 'timeout'. Used only
+  // by the CI autoplay smoke test. Underscore prefix + not listed in
+  // package.json contributes signals "do not use."
+  const firePlayForTestCmd = vscode.commands.registerCommand(
+    'claudeDashboard.__firePlayForTest',
+    (filename: string, volume = 0, timeoutMs = 5000): Promise<'played' | 'error' | 'timeout'> => {
+      return new Promise((resolve) => {
+        let settled = false;
+        const settle = (result: 'played' | 'error' | 'timeout') => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          sub.dispose();
+          resolve(result);
+        };
+        const timer = setTimeout(() => settle('timeout'), timeoutMs);
+        const sub = provider.onAudioAck((ack) => {
+          // Match by filename so an unrelated in-flight play doesn't
+          // resolve this call (test runs in isolation so this is belt-
+          // and-braces, but cheap).
+          if (!ack.url.endsWith(`/${filename}`)) return;
+          settle(ack.type === 'played' ? 'played' : 'error');
+        });
+        provider.postPlay(filename, volume);
+      });
+    },
+  );
+
   // First-activation onboarding: if hooks aren't installed AND we haven't
   // prompted before, show the install notification. Gate on globalState so
   // users who dismissed once aren't nagged on every reload. Set the flag
@@ -179,11 +255,12 @@ export function activate(context: vscode.ExtensionContext) {
       case 'setupProjects':
         runSetupWizard(configManager, context.extensionPath, (m) => log(m));
         break;
+
+      case 'toggleAudio':
+        vscode.commands.executeCommand('claudeDashboard.toggleAudio');
+        break;
     }
   };
-
-  // Refresh tiles on terminal changes
-  const refreshTiles = () => provider.updateTiles(tracker.getTiles());
 
   tracker.onChange(refreshTiles);
 
@@ -197,10 +274,19 @@ export function activate(context: vscode.ExtensionContext) {
     }
   });
 
-  // Refresh tiles when config file changes (color/nickname/mode edits)
+  // v0.12 — audio alert player. Subscribes to tracker state transitions,
+  // posts play messages to the dashboard webview. Created before configSub
+  // so its resetWarnings() can be called from the config-change callback.
+  const audioPlayer = new AudioPlayer(tracker, configManager, provider, log);
+
+  // Refresh tiles when config file changes (color/nickname/mode edits).
+  // The AudioPlayer's warn-once memory is also cleared so a file the user
+  // just dropped in gets a fresh chance to be picked up.
   const configSub = configManager.onChange(() => {
     syncDebugFlag();
     tracker.refreshFromConfig();
+    audioPlayer.resetWarnings();
+    provider.clearSoundUriCache();
   });
 
   // Periodic refresh for relative time display (every 30s)
@@ -227,10 +313,14 @@ export function activate(context: vscode.ExtensionContext) {
     registerProjectCmd,
     setupProjectsCmd,
     showHooksCmd,
+    toggleAudioCmd,
+    openSoundsFolderCmd,
+    firePlayForTestCmd,
     tracker,
     watcher,
     configManager,
     configSub,
+    audioPlayer,
     output,
     timerDisposable,
   );

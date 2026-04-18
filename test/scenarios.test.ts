@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { ConfigManager } from '../src/configManager';
 import { TerminalTracker } from '../src/terminalTracker';
+import { AudioPlayer } from '../src/audio';
 
 /**
  * v0.9.3 scenario tests — walks the state machine through realistic Claude
@@ -572,6 +573,107 @@ describe('v0.9.3 scenario: subagent permission prompt (F6)', () => {
     tracker.updateStatus('my-project', 'subagent_stop', 'SubagentStop');
     expect(tile().status).toBe('ready');
     expect(tile().statusLabel).toBe('Ready for input');
+  });
+});
+
+describe('v0.12 scenario: audio alerts end-to-end', () => {
+  // These exercises the whole chain: tracker → onStateChange → AudioPlayer
+  // → postTarget. They cover the four scenarios called out in the spec's
+  // Tests section — Stop→ready plays ready, Notification→ready plays
+  // permission when set, Notification→ready falls back when permission
+  // unset, simultaneous Stops on 3 tiles play one sound.
+
+  type Play = { filename: string; volume: number };
+
+  function setupAudio(
+    soundsCfg: { ready?: string; permission?: string },
+    tiles: string[] = ['proj'],
+    debounceMs = 0,
+  ) {
+    __resetMock();
+    (vscode.workspace as any).workspaceFolders = [
+      { uri: (vscode.Uri as any).file(TEST_ROOT), name: 'test', index: 0 },
+    ];
+    const soundsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scenario-sounds-'));
+    for (const name of Object.values(soundsCfg)) {
+      if (name) fs.writeFileSync(path.join(soundsDir, name), 'x');
+    }
+    writeConfig({
+      terminals: {},
+      audio: { enabled: true, volume: 0.5, debounceMs, sounds: soundsCfg },
+    });
+    for (const t of tiles) addMockTerminal(t);
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+    const plays: Play[] = [];
+    const target = { postPlay: (filename: string, volume: number) => plays.push({ filename, volume }) };
+    const player = new AudioPlayer(tracker, cm, target, undefined, soundsDir);
+    const cleanup = () => {
+      player.dispose();
+      tracker.dispose();
+      cm.dispose();
+      fs.rmSync(soundsDir, { recursive: true, force: true });
+      cleanConfig();
+    };
+    return { tracker, cm, plays, cleanup };
+  }
+
+  it('Stop → ready plays the ready slot', async () => {
+    const { tracker, plays, cleanup } = setupAudio({ ready: 'chime.mp3' });
+    try {
+      tracker.updateStatus('proj', 'working', 'UserPromptSubmit');
+      tracker.updateStatus('proj', 'ready', 'Stop');
+      await new Promise((r) => setTimeout(r, 10));
+      expect(plays.map((p) => p.filename)).toEqual(['chime.mp3']);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('Notification → ready plays permission when set', async () => {
+    const { tracker, plays, cleanup } = setupAudio({ ready: 'chime.mp3', permission: 'ping.mp3' });
+    try {
+      tracker.updateStatus('proj', 'working', 'UserPromptSubmit');
+      tracker.updateStatus('proj', 'ready', 'Notification', undefined, {
+        notification_type: 'permission_prompt',
+      });
+      await new Promise((r) => setTimeout(r, 10));
+      expect(plays.map((p) => p.filename)).toEqual(['ping.mp3']);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('Notification → ready falls back to ready when permission unset', async () => {
+    const { tracker, plays, cleanup } = setupAudio({ ready: 'chime.mp3' });
+    try {
+      tracker.updateStatus('proj', 'working', 'UserPromptSubmit');
+      tracker.updateStatus('proj', 'ready', 'Notification', undefined, {
+        notification_type: 'permission_prompt',
+      });
+      await new Promise((r) => setTimeout(r, 10));
+      expect(plays.map((p) => p.filename)).toEqual(['chime.mp3']);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('simultaneous Stops on 3 tiles play one sound (debounce coalesces)', async () => {
+    const { tracker, plays, cleanup } = setupAudio(
+      { ready: 'chime.mp3' },
+      ['a', 'b', 'c'],
+      50, // 50ms debounce window
+    );
+    try {
+      for (const n of ['a', 'b', 'c']) {
+        tracker.updateStatus(n, 'working', 'UserPromptSubmit');
+        tracker.updateStatus(n, 'ready', 'Stop');
+      }
+      await new Promise((r) => setTimeout(r, 80));
+      expect(plays.length).toBe(1);
+    } finally {
+      cleanup();
+    }
   });
 });
 

@@ -102,6 +102,16 @@
         "command": "claudeDashboard.showHooks",
         "title": "Show Me the Hooks (open docs)",
         "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.toggleAudio",
+        "title": "Toggle Audio",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.openSoundsFolder",
+        "title": "Open Sounds Folder",
+        "category": "Claudelike Bar"
       }
     ],
     "menus": {
@@ -159,14 +169,17 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --platform=node --external:vscode --format=cjs --main-fields=module,main",
     "watch": "npm run build -- --watch",
     "package": "npm run build && vsce package",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "tsc -p test/integration/tsconfig.json && node test/integration/out/autoplay.test.js"
   },
   "dependencies": {
     "jsonc-parser": "^3.3.1"
   },
   "devDependencies": {
+    "@types/node": "^20.19.39",
     "@types/vscode": "^1.93.0",
     "@vscode/codicons": "^0.0.45",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^2.24.0",
     "esbuild": "^0.20.0",
     "typescript": "^5.4.0",

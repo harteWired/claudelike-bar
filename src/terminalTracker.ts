@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { TileData, SessionStatus, HookStatusSignal, ICON_MAP, getThemeColor } from './types';
+import { TileData, SessionStatus, HookStatusSignal, ICON_MAP, getThemeColor, StateTransition } from './types';
 import { ConfigManager } from './configManager';
 
 export class TerminalTracker implements vscode.Disposable {
@@ -10,6 +10,11 @@ export class TerminalTracker implements vscode.Disposable {
   private disposables: vscode.Disposable[] = [];
   private onChangeEmitter = new vscode.EventEmitter<void>();
   readonly onChange = this.onChangeEmitter.event;
+  // v0.12 — fires on every status transition (old → new). Consumers filter
+  // on to/from. Separate from `onChange` which debounces for the webview
+  // and doesn't carry transition detail.
+  private onStateChangeEmitter = new vscode.EventEmitter<StateTransition>();
+  readonly onStateChange = this.onStateChangeEmitter.event;
   private nameRefreshTimer: ReturnType<typeof setInterval> | undefined;
   private nameRefreshIdleCycles = 0;
   private configManager: ConfigManager;
@@ -44,6 +49,7 @@ export class TerminalTracker implements vscode.Disposable {
         this.onChangeEmitter.fire();
       }),
       this.onChangeEmitter,
+      this.onStateChangeEmitter,
     );
 
     // Periodically refresh terminal names — catches late profile name assignment
@@ -718,6 +724,20 @@ export class TerminalTracker implements vscode.Disposable {
         tile.lastActivity = Date.now();
         tile.event = event;
         this.log(() => `transition ${tile.name}: ${prev} → ${tile.status} (event=${event ?? '-'})`);
+        // v0.12 — emit state transition for audio + other downstream
+        // consumers. Fires on every status change (not label-only refreshes).
+        // Emitted even when from === to so consumers that care about a
+        // specific incoming transition (e.g. ready-label refresh from a late
+        // Notification) can still see the event, but AudioPlayer filters
+        // from === 'ready' && to === 'ready' itself.
+        this.onStateChangeEmitter.fire({
+          tileId: tile.id,
+          name: tile.name,
+          from: prev,
+          to: tile.status,
+          event,
+          isActive: tile.isActive,
+        });
       } else {
         this.log(() => `no-op ${tile.name}: stayed ${prev} (event=${event ?? '-'}, incoming=${status})`);
       }

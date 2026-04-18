@@ -10,6 +10,9 @@ let draggingId = null;
 let suppressNextClick = false;
 /** The tile element currently decorated with a drop-indicator class. */
 let dropIndicatorEl = null;
+/** v0.12 — most recent audio.enabled state from the extension host. Used to
+ * label the tile context-menu toggle as "Mute Audio" / "Unmute Audio". */
+let audioEnabled = false;
 
 // Handle messages from extension
 window.addEventListener('message', (event) => {
@@ -17,6 +20,36 @@ window.addEventListener('message', (event) => {
   if (message.type === 'update') {
     diffUpdate(message.tiles);
     currentTiles = message.tiles;
+    if (typeof message.audioEnabled === 'boolean') {
+      audioEnabled = message.audioEnabled;
+    }
+  } else if (message.type === 'play') {
+    // v0.12 — play a sound via HTML5 audio. The extension has already
+    // resolved the URL into a webview URI and validated the filename.
+    // We post an ack back (`audioPlayed` or `audioPlayError`) so the
+    // CI smoke test can assert autoplay didn't get blocked. Production
+    // code ignores the acks.
+    const url = message.url;
+    try {
+      const audio = new Audio(url);
+      audio.volume = typeof message.volume === 'number' ? message.volume : 0.6;
+      audio.play().then(() => {
+        vscode.postMessage({ type: 'audioPlayed', url });
+      }).catch((err) => {
+        vscode.postMessage({
+          type: 'audioPlayError',
+          url,
+          reason: String((err && err.message) || err),
+        });
+      });
+    } catch (err) {
+      // Constructor can throw on malformed URL.
+      vscode.postMessage({
+        type: 'audioPlayError',
+        url,
+        reason: String((err && err.message) || err),
+      });
+    }
   }
 });
 
@@ -392,6 +425,16 @@ function showContextMenu(e, tileId) {
     vscode.postMessage({ type: 'markDone', id: tileId });
   });
   menu.appendChild(doneItem);
+
+  // v0.12 — Mute / Unmute audio. Label flips based on current state so the
+  // user always sees the action they're about to take. Posts `toggleAudio`
+  // (not tied to a specific tile; the command is global).
+  const audioIcon = audioEnabled ? '\uD83D\uDD07' : '\uD83D\uDD0A'; // 🔇 / 🔊
+  const audioLabel = audioEnabled ? 'Mute Audio' : 'Unmute Audio';
+  const audioItem = menuItem(audioIcon, audioLabel, () => {
+    vscode.postMessage({ type: 'toggleAudio' });
+  });
+  menu.appendChild(audioItem);
 
   // Separator
   menu.appendChild(menuSeparator());

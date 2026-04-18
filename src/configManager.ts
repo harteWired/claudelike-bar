@@ -2,8 +2,8 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse as parseJsonc } from 'jsonc-parser';
-import { ThemeGroup, getDefaultColor, ICON_MAP } from './types';
-import { claudeDir, globalConfigPath, pathIndexPath } from './claudePaths';
+import { ThemeGroup, getDefaultColor, ICON_MAP, AudioConfig } from './types';
+import { claudeDir, globalConfigPath, pathIndexPath, soundsDir } from './claudePaths';
 
 export interface TerminalConfig {
   color: ThemeGroup | 'red' | string;
@@ -71,6 +71,22 @@ export interface ContextThresholds {
 
 export type SortMode = 'auto' | 'manual';
 
+/**
+ * Raw on-disk shape of the audio section — every field optional, and any
+ * unknown keys are preserved through read-merge-write (v0.12).
+ */
+export interface AudioConfigRaw {
+  enabled?: boolean;
+  volume?: number;
+  debounceMs?: number;
+  sounds?: {
+    ready?: string | null;
+    permission?: string | null;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
 export interface ConfigFile {
   $schema?: string;
   description?: string;
@@ -81,8 +97,13 @@ export interface ConfigFile {
   labels?: Partial<Record<string, string>>;
   contextThresholds?: Partial<ContextThresholds>;
   ignoredTexts?: string[];
+  audio?: AudioConfigRaw;
   terminals: Record<string, TerminalConfig>;
 }
+
+const AUDIO_FILENAME_RE = /^[a-zA-Z0-9._-]+$/;
+const DEFAULT_AUDIO_VOLUME = 0.6;
+const DEFAULT_AUDIO_DEBOUNCE_MS = 150;
 
 const CONFIG_FILENAME = '.claudelike-bar.jsonc';
 const LEGACY_CONFIG_FILENAME = '.claudelike-bar.json';
@@ -131,6 +152,10 @@ export class ConfigManager implements vscode.Disposable {
   private isSavingTimer: ReturnType<typeof setTimeout> | undefined;
   private hasShownWriteError = false;
   private mergedLabels: Record<string, string> = { ...DEFAULT_LABELS };
+  // v0.12 — getAudioConfig() hits fs.existsSync() twice per call. Cache the
+  // validated result so hot-path callers (every state transition + every
+  // refreshTiles) don't pay the sync I/O tax. Invalidated on reload.
+  private _audioConfigCache: AudioConfig | undefined;
 
   constructor(configPathOverride?: string) {
     // v0.10.1 — config lives at ~/.claude/claudelike-bar.jsonc (user-global).
@@ -184,6 +209,9 @@ export class ConfigManager implements vscode.Disposable {
       if (parsed && typeof parsed.terminals === 'object') {
         this.config = parsed;
         this.mergedLabels = { ...DEFAULT_LABELS, ...this.config.labels };
+        // Any audio.* fields may have changed — drop the cache so the next
+        // getAudioConfig() re-validates against the new on-disk state.
+        this._audioConfigCache = undefined;
       }
     } catch {
       // File is malformed — start fresh
@@ -234,6 +262,7 @@ export class ConfigManager implements vscode.Disposable {
       this.watcher.onDidDelete(() => {
         if (this.isSaving) return;
         this.config = { terminals: {} };
+        this._audioConfigCache = undefined;
         this.onChangeEmitter.fire();
       }),
       this.watcher,
@@ -269,6 +298,79 @@ export class ConfigManager implements vscode.Disposable {
   /** Whether debug logging is enabled. */
   isDebugEnabled(): boolean {
     return this.config.debug === true;
+  }
+
+  /**
+   * Resolve + validate the audio section. Returns a fully-typed AudioConfig
+   * with slots nulled-out when their filename is invalid or missing on disk.
+   * Slots fail independently — a bad `permission` never disables `ready`.
+   *
+   * Validation rules (per spec):
+   *   - Filename must match ^[a-zA-Z0-9._-]+$ (prevents path traversal)
+   *   - File must exist at ~/.claude/sounds/<name>
+   *   - Missing / null / empty slot is silently allowed (just silent)
+   *
+   * `soundsDirOverride` is a test hook — tests point it at a temp dir.
+   * When an override is passed the result is NOT cached (tests change dirs
+   * between runs; caching a temp path would poison later calls).
+   */
+  getAudioConfig(soundsDirOverride?: string): AudioConfig {
+    if (!soundsDirOverride && this._audioConfigCache) {
+      return this._audioConfigCache;
+    }
+    const raw = (this.config.audio ?? {}) as AudioConfigRaw;
+    const dir = soundsDirOverride ?? soundsDir();
+    const volume = typeof raw.volume === 'number' && raw.volume >= 0 && raw.volume <= 1
+      ? raw.volume
+      : DEFAULT_AUDIO_VOLUME;
+    const debounceMs = typeof raw.debounceMs === 'number' && raw.debounceMs >= 0
+      ? raw.debounceMs
+      : DEFAULT_AUDIO_DEBOUNCE_MS;
+    const sounds = (raw.sounds ?? {}) as { ready?: unknown; permission?: unknown };
+    const validateSlot = (value: unknown): string | null => {
+      if (typeof value !== 'string' || value.length === 0) return null;
+      if (!AUDIO_FILENAME_RE.test(value)) return null;
+      try {
+        if (!fs.existsSync(path.join(dir, value))) return null;
+      } catch {
+        return null;
+      }
+      return value;
+    };
+    const resolved: AudioConfig = {
+      enabled: raw.enabled === true,
+      volume,
+      debounceMs,
+      sounds: {
+        ready: validateSlot(sounds.ready),
+        permission: validateSlot(sounds.permission),
+      },
+    };
+    if (!soundsDirOverride) {
+      this._audioConfigCache = resolved;
+    }
+    return resolved;
+  }
+
+  /**
+   * Zero-I/O read of audio.enabled. Used on the hot path (every refreshTiles
+   * call) so we don't pay the fs.existsSync() tax just to light up the
+   * Mute/Unmute label in the webview menu.
+   */
+  isAudioEnabled(): boolean {
+    return this.config.audio?.enabled === true;
+  }
+
+  /**
+   * Flip the master audio switch. Preserves all other audio.* fields via
+   * read-merge-write. Returns the new enabled value for toast text.
+   */
+  setAudioEnabled(enabled: boolean): boolean {
+    const existing = (this.config.audio ?? {}) as AudioConfigRaw;
+    this.config.audio = { ...existing, enabled };
+    this._audioConfigCache = undefined;
+    this.scheduleSave();
+    return enabled;
   }
 
   /**
@@ -504,6 +606,31 @@ export class ConfigManager implements vscode.Disposable {
     const labels = { ...DEFAULT_LABELS, ...this.config.labels };
     const thresholds = this.getContextThresholds();
     const ignoredTexts = this.getIgnoredTexts();
+    // Serialize the raw audio object (preserves unknown keys users may have
+    // added). Fill the canonical fields with sensible defaults when absent so
+    // the written block has a useful shape on first save.
+    const rawAudio = (this.config.audio ?? {}) as AudioConfigRaw;
+    const audio: AudioConfigRaw = {
+      enabled: rawAudio.enabled === true,
+      volume: typeof rawAudio.volume === 'number' ? rawAudio.volume : DEFAULT_AUDIO_VOLUME,
+      debounceMs: typeof rawAudio.debounceMs === 'number' ? rawAudio.debounceMs : DEFAULT_AUDIO_DEBOUNCE_MS,
+      sounds: {
+        ready: (rawAudio.sounds?.ready as string | null | undefined) ?? null,
+        permission: (rawAudio.sounds?.permission as string | null | undefined) ?? null,
+        // Carry through any unknown slot keys the user added (future states).
+        ...Object.fromEntries(
+          Object.entries((rawAudio.sounds ?? {}) as Record<string, unknown>).filter(
+            ([k]) => k !== 'ready' && k !== 'permission',
+          ),
+        ),
+      },
+      // Carry through unknown top-level audio.* keys.
+      ...Object.fromEntries(
+        Object.entries(rawAudio).filter(
+          ([k]) => k !== 'enabled' && k !== 'volume' && k !== 'debounceMs' && k !== 'sounds',
+        ),
+      ),
+    };
     const terminals = this.config.terminals;
 
     const indent = (json: string, spaces: number): string =>
@@ -557,6 +684,11 @@ export class ConfigManager implements vscode.Disposable {
       '  // terminal and switch away without acting. Only used in "passive-aggressive" mode.',
       '  // Add, remove, or edit these \u2014 one is picked at random each time.',
       `  "ignoredTexts": ${indent(JSON.stringify(ignoredTexts, null, 4), 2)},`,
+      '',
+      '  // Audio alerts (v0.12). Off by default. Drop sound files into',
+      '  // ~/.claude/sounds/ and reference them by filename. `permission`',
+      '  // falls back to `ready` if unset. See docs/audio-setup.md.',
+      `  "audio": ${indent(JSON.stringify(audio, null, 4), 2)},`,
       '',
       '  // \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510',
       '  // \u2502  TERMINALS \u2014 per-project overrides              \u2502',

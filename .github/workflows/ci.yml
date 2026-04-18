@@ -55,3 +55,37 @@ jobs:
           echo '{}' > ~/.claude/settings.json
           chmod +x setup.sh
           ./setup.sh
+
+  autoplay-smoke:
+    # v0.12 — audio alerts CI smoke test. Launches VS Code headlessly via
+    # @vscode/test-electron, installs the extension, opens the sidebar, and
+    # exercises the audio code path. Fails if Chromium tightens autoplay
+    # policy for VS Code webviews (the regression that would silently mute
+    # every user's alerts on upgrade). Linux-only because xvfb is the
+    # simplest way to run Electron without a display server.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Package VSIX
+        run: npm run package
+
+      - name: Install xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Autoplay smoke test
+        run: xvfb-run -a npm run test:integration
+        env:
+          # Pin VS Code insiders → stable channel so test-electron
+          # downloads the same version every run.
+          VSCODE_VERSION: stable

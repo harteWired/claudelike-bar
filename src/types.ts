@@ -58,6 +58,22 @@ export interface TileData {
   subagentPermissionPending?: boolean;
 }
 
+/**
+ * v0.12 — cross-module event shape fired by the tracker whenever a tile's
+ * status changes. Lives here (not in audio.ts) so low-level modules like
+ * terminalTracker don't have to reach into the audio consumer for a type.
+ */
+export interface StateTransition {
+  tileId: number;
+  name: string;
+  from: SessionStatus;
+  to: SessionStatus;
+  event?: string;
+  isActive: boolean;
+}
+
+export type TransitionListener = (transition: StateTransition) => void;
+
 export type WebviewMessage =
   | { type: 'switchTerminal'; id: number }
   | { type: 'cloneTerminal'; id: number }
@@ -66,7 +82,42 @@ export type WebviewMessage =
   | { type: 'reorderTiles'; orderedIds: number[] }
   | { type: 'setColor'; id: number; color: string | null }
   | { type: 'addProject' }
-  | { type: 'setupProjects' };
+  | { type: 'setupProjects' }
+  | { type: 'toggleAudio' }
+  // v0.12 — webview → extension acks after an audio play attempt. Only the
+  // internal __firePlayForTest command consumes these; production code
+  // ignores them. Kept always-on so the CI smoke test doesn't need a
+  // special build mode.
+  | { type: 'audioPlayed'; url: string }
+  | { type: 'audioPlayError'; url: string; reason: string };
+
+/** v0.12 — audio-playback ack surfaced by DashboardProvider.onAudioAck. */
+export interface AudioAck {
+  type: 'played' | 'error';
+  url: string;
+  reason?: string;
+}
+
+/**
+ * v0.12 — audio alert config. All fields optional; sensible defaults applied
+ * in ConfigManager. Unknown keys are preserved through read-merge-write.
+ */
+export interface AudioConfig {
+  enabled: boolean;
+  volume: number;       // 0.0 – 1.0
+  debounceMs: number;
+  sounds: {
+    ready?: string | null;       // filename in ~/.claude/sounds/
+    permission?: string | null;  // filename in ~/.claude/sounds/
+  };
+}
+
+/** Sent from extension host to webview to play a sound. */
+export interface AudioPlayMessage {
+  type: 'play';
+  url: string;
+  volume: number;
+}
 
 export interface StatusFileData {
   project: string;

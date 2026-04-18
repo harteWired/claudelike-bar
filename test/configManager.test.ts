@@ -377,6 +377,138 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
     expect(cfg?.command).toBe('claude --enable-auto-mode');
   });
 
+  // --- v0.12 audio section ---
+
+  describe('audio config parsing', () => {
+    let soundsDir: string;
+
+    beforeEach(() => {
+      soundsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cm-audio-sounds-'));
+    });
+
+    afterEach(() => {
+      fs.rmSync(soundsDir, { recursive: true, force: true });
+    });
+
+    function dropFile(name: string) {
+      fs.writeFileSync(path.join(soundsDir, name), 'x');
+    }
+
+    it('returns sensible defaults when no audio section is present', () => {
+      writeConfig({ terminals: {} });
+      const audio = makeCm().getAudioConfig(soundsDir);
+      expect(audio.enabled).toBe(false);
+      expect(audio.volume).toBe(0.6);
+      expect(audio.debounceMs).toBe(150);
+      expect(audio.sounds.ready).toBeNull();
+      expect(audio.sounds.permission).toBeNull();
+    });
+
+    it('parses a fully-specified audio section', () => {
+      dropFile('chime.mp3');
+      dropFile('ping.mp3');
+      writeConfig({
+        terminals: {},
+        audio: {
+          enabled: true,
+          volume: 0.3,
+          debounceMs: 250,
+          sounds: { ready: 'chime.mp3', permission: 'ping.mp3' },
+        },
+      });
+      const audio = makeCm().getAudioConfig(soundsDir);
+      expect(audio.enabled).toBe(true);
+      expect(audio.volume).toBe(0.3);
+      expect(audio.debounceMs).toBe(250);
+      expect(audio.sounds.ready).toBe('chime.mp3');
+      expect(audio.sounds.permission).toBe('ping.mp3');
+    });
+
+    it('rejects path-traversal filenames (whitelist regex)', () => {
+      // Even if the file exists, the name must match ^[a-zA-Z0-9._-]+$.
+      // Slashes and leading dots beyond the filename part are rejected.
+      writeConfig({
+        terminals: {},
+        audio: { enabled: true, sounds: { ready: '../evil.mp3' } },
+      });
+      const audio = makeCm().getAudioConfig(soundsDir);
+      expect(audio.sounds.ready).toBeNull();
+    });
+
+    it('rejects filenames for files that do not exist in the sounds dir', () => {
+      writeConfig({
+        terminals: {},
+        audio: { enabled: true, sounds: { ready: 'ghost.mp3' } },
+      });
+      const audio = makeCm().getAudioConfig(soundsDir);
+      expect(audio.sounds.ready).toBeNull();
+    });
+
+    it('slots fail independently — invalid permission does not disable ready', () => {
+      dropFile('chime.mp3');
+      writeConfig({
+        terminals: {},
+        audio: {
+          enabled: true,
+          sounds: { ready: 'chime.mp3', permission: 'missing.mp3' },
+        },
+      });
+      const audio = makeCm().getAudioConfig(soundsDir);
+      expect(audio.sounds.ready).toBe('chime.mp3');
+      expect(audio.sounds.permission).toBeNull();
+    });
+
+    it('clamps out-of-range volume to default', () => {
+      writeConfig({
+        terminals: {},
+        audio: { enabled: true, volume: 2.5, sounds: {} },
+      });
+      const audio = makeCm().getAudioConfig(soundsDir);
+      // Out-of-range → default, not clamped-to-1. Keeps the config explicit.
+      expect(audio.volume).toBe(0.6);
+    });
+
+    it('preserves unknown audio.* keys through read-merge-write', () => {
+      dropFile('chime.mp3');
+      // User has added an experimental slot `error` that v1 doesn't wire up;
+      // the config must preserve it unchanged across save.
+      writeConfig({
+        terminals: {},
+        audio: {
+          enabled: true,
+          customKey: 'experimental-value',
+          sounds: { ready: 'chime.mp3', error: 'oh-no.mp3' },
+        },
+      });
+      const cm2 = makeCm();
+      // Force a save by toggling an unrelated field.
+      cm2.setAudioEnabled(false);
+      // Flush by disposing (disposer calls save() for pending debounces).
+      cm2.dispose();
+
+      // Re-read raw file contents to verify preservation.
+      const raw = fs.readFileSync(path.join(tmpWorkspace, '.claudelike-bar.jsonc'), 'utf-8');
+      expect(raw).toContain('customKey');
+      expect(raw).toContain('experimental-value');
+      expect(raw).toContain('oh-no.mp3');
+      // Reset cm field so afterEach doesn't try to dispose a second time.
+      cm = undefined as any;
+    });
+
+    it('setAudioEnabled toggles the master switch and preserves sounds', () => {
+      dropFile('chime.mp3');
+      writeConfig({
+        terminals: {},
+        audio: { enabled: false, sounds: { ready: 'chime.mp3' } },
+      });
+      const cm2 = makeCm();
+      cm2.setAudioEnabled(true);
+      const audio = cm2.getAudioConfig(soundsDir);
+      expect(audio.enabled).toBe(true);
+      expect(audio.sounds.ready).toBe('chime.mp3');
+    });
+  });
+
   it('drops shellArgs when every entry is non-string (remains undefined)', () => {
     writeConfig({
       terminals: {

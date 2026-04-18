@@ -277,6 +277,17 @@ export function activate(context: vscode.ExtensionContext) {
         configManager.setSortMode(message.mode);
         refreshTiles();
         break;
+
+      case 'setPinned':
+        tracker.setPinned(message.id, message.pinned);
+        break;
+
+      case 'launchByName':
+        // v0.13.4 (#15) — click on a registered (offline) tile launches
+        // the project. Routes through the same shared helper as the
+        // QuickPick launcher and runAutoStart.
+        launchRegisteredProject(configManager, tracker, message.name, log);
+        break;
     }
   };
 

@@ -48,6 +48,24 @@ export interface TerminalConfig {
    * Example (pwsh 7 with no profile): ["-NoProfile"].
    */
   shellArgs?: string[] | null;
+  /**
+   * v0.13.4 (#4) — when true, the tile lives in a fixed-position "pinned"
+   * zone at the bottom of the bar regardless of `sortMode`. Pinned tiles
+   * are sorted by `order` within their zone (assigned via drag); unpinned
+   * tiles fill the top of the bar and follow the global sort. Useful for
+   * keeping monitoring/infra terminals at known coordinates while urgent
+   * project tiles float to the top.
+   */
+  pinned?: boolean;
+  /**
+   * v0.13.4 (#15) — when true, this entry is excluded from the registered-
+   * tile zone (the dim "click to launch" tiles for projects you've registered
+   * but haven't opened yet). Use this for archived projects you don't want
+   * to delete from the registry but also don't want cluttering the bar.
+   * Has no effect on entries that are currently running — the live tile
+   * always appears regardless.
+   */
+  hidden?: boolean;
 }
 
 /**
@@ -98,6 +116,14 @@ export interface ConfigFile {
   contextThresholds?: Partial<ContextThresholds>;
   ignoredTexts?: string[];
   audio?: AudioConfigRaw;
+  /**
+   * v0.13.4 (#15) — when true, render a dim/dashed tile for every
+   * registered config entry that isn't currently running (and isn't
+   * `hidden: true`). Click to launch. Default true — opt out by setting
+   * this to false if you want the bar to only show currently-open
+   * terminals, like prior versions.
+   */
+  showRegisteredProjects?: boolean;
   terminals: Record<string, TerminalConfig>;
 }
 
@@ -123,6 +149,8 @@ const DEFAULT_LABELS: Record<string, string> = {
   tool_error: 'Working (tool error)',
   // v0.9.3 — subagent permission prompt while parent is still working
   subagent_permission: 'Subagent needs permission',
+  // v0.13.4 (#15) — registered but not yet running. Click the dim tile to launch.
+  registered: 'Click to launch',
 };
 
 const DEFAULT_IGNORED_TEXTS = [
@@ -481,6 +509,20 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   /**
+   * v0.13.4 (#4) — flip the `pinned` flag on a terminal entry. Pinned tiles
+   * stay in a fixed-position zone at the bottom of the bar regardless of
+   * `sortMode` (the tracker handles the splitting; ConfigManager just
+   * persists the flag).
+   */
+  setPinned(name: string, pinned: boolean): void {
+    const entry = this.config.terminals[name];
+    if (!entry) return;
+    if (pinned) entry.pinned = true;
+    else delete entry.pinned;
+    this.scheduleSave();
+  }
+
+  /**
    * Assign sequential `order` values to terminals by name. Names not in the
    * list are left with whatever order they already had. Used by drag-and-drop
    * reordering in the webview.
@@ -532,6 +574,16 @@ export class ConfigManager implements vscode.Disposable {
     if (this.config.sortMode === mode) return;
     this.config.sortMode = mode;
     this.scheduleSave();
+  }
+
+  /**
+   * v0.13.4 (#15) — should the bar render dim "registered" tiles for
+   * config entries that aren't currently running? Defaults to true.
+   * Set false in the config to revert to the "running terminals only"
+   * behavior of prior versions.
+   */
+  getShowRegisteredProjects(): boolean {
+    return this.config.showRegisteredProjects !== false;
   }
 
   private scheduleSave(): void {

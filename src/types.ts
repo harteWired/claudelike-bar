@@ -1,4 +1,4 @@
-export type SessionStatus = 'idle' | 'working' | 'ready' | 'waiting' | 'done' | 'ignored' | 'error' | 'offline';
+export type SessionStatus = 'idle' | 'working' | 'ready' | 'waiting' | 'done' | 'ignored' | 'error' | 'offline' | 'registered';
 
 /**
  * Raw status signals written by the hook script (not internal tile states).
@@ -56,6 +56,10 @@ export interface TileData {
   // on UserPromptSubmit/Stop — we don't have per-subagent permission
   // tracking, so we wait until all subagents have finished (conservative).
   subagentPermissionPending?: boolean;
+  // v0.13.4 (#4) — pinned tile sits in a fixed-position zone at the bottom
+  // of the bar regardless of sortMode. The webview uses this flag to
+  // decorate the first pinned tile with a divider above it.
+  pinned?: boolean;
 }
 
 /**
@@ -86,6 +90,8 @@ export type WebviewMessage =
   | { type: 'toggleAudio' }
   | { type: 'launchProject' }
   | { type: 'setSortMode'; mode: 'auto' | 'manual' }
+  | { type: 'setPinned'; id: number; pinned: boolean }
+  | { type: 'launchByName'; name: string }
   // v0.12 — webview → extension acks after an audio play attempt. Only the
   // internal __firePlayForTest command consumes these; production code
   // ignores them. Kept always-on so the CI smoke test doesn't need a

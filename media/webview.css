@@ -323,3 +323,38 @@ body {
 .color-swatch-custom::-webkit-color-swatch-wrapper { padding: 0; }
 .color-swatch-custom::-webkit-color-swatch { border: none; border-radius: 1px; }
 .color-swatch-custom::-moz-color-swatch { border: none; border-radius: 1px; }
+
+/* v0.13.4 (#4) — divider above the first pinned tile. Subtle to avoid
+ * visually competing with status colors; the gap + thin rule reads as
+ * "different zone." */
+.tile.pinned-first {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+/* v0.13.4 (#15) — registered (offline-but-launchable) tile. Dim,
+ * dashed, hover-brightens. The dot is hidden because there's no live
+ * status to convey; the icon (codicon) carries the identity. Click
+ * launches the project and the tile transitions to a real one. */
+.tile.status-registered {
+  opacity: 0.5;
+  border-style: dashed;
+  cursor: pointer;
+}
+.tile.status-registered:hover {
+  opacity: 0.85;
+}
+.tile.status-registered .dot {
+  display: none;
+}
+.tile.status-registered .tile-time {
+  display: none;
+}
+/* Same divider treatment as pinned, applied to the first registered
+ * tile in the list. The webview adds .registered-first to the boundary. */
+.tile.registered-first {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--vscode-panel-border);
+}

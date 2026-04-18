@@ -136,6 +136,8 @@ Claude will read `~/.claude/claudelike-bar.jsonc`, ask what projects you care ab
 - **Audio alerts** — optional chime when Claude finishes, optional second sound for permission prompts; bring your own clips *(v0.12)*
 - **Auto-start safety** — entries with missing `cwd` are skipped with a single summary toast instead of N modal errors *(v0.13.1)*
 - **"Switch to auto sort"** — when in manual mode, right-click any tile to flip back to status-based sort *(v0.13.1)*
+- **Pinned tiles** — right-click → Pin tile to fix a terminal in a stable bottom zone regardless of `sortMode`. Useful for monitoring/infra tiles you want at known coordinates while urgent project tiles float to the top *(v0.13.4)*
+- **Offline tiles for registered projects** — every entry in your config that isn't currently running shows as a dim/dashed tile in its own zone at the bottom of the bar. Click to launch. Per-entry `hidden: true` opt-out, or set `showRegisteredProjects: false` to disable globally *(v0.13.4)*
 
 ## Audio
 

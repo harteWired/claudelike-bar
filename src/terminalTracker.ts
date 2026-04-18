@@ -26,6 +26,12 @@ export class TerminalTracker implements vscode.Disposable {
   // Focus tracking: which tile was focused while in "waiting" state
   private focusedWaitingTile: number | null = null;
 
+  // v0.13.4 (#15) — stable negative ids for synthesized "registered" tiles.
+  // Lazy assignment per slug; survives across getTiles() calls so the
+  // webview's diff-update doesn't churn DOM elements between renders.
+  private syntheticIds = new Map<string, number>();
+  private nextSyntheticId = -1;
+
   constructor(configManager: ConfigManager, log?: (msg: string | (() => string)) => void) {
     this.configManager = configManager;
     this.log = log ?? (() => {});
@@ -84,6 +90,7 @@ export class TerminalTracker implements vscode.Disposable {
       toolError: false,
       compacting: false,
       subagentPermissionPending: false,
+      pinned: cfg?.pinned === true,
     });
   }
 
@@ -222,7 +229,7 @@ export class TerminalTracker implements vscode.Disposable {
     }
   }
 
-  /** Re-apply config (colors, nicknames, icons, thresholds) to all tracked tiles. */
+  /** Re-apply config (colors, nicknames, icons, thresholds, pinned) to all tracked tiles. */
   refreshFromConfig(): void {
     const thresholds = this.configManager.getContextThresholds();
     for (const [, tile] of this.terminals) {
@@ -232,6 +239,7 @@ export class TerminalTracker implements vscode.Disposable {
       tile.icon = cfg?.icon ?? ICON_MAP[tile.name] ?? null;
       tile.contextWarn = thresholds.warn;
       tile.contextCrit = thresholds.crit;
+      tile.pinned = cfg?.pinned === true;
       // Refresh status label — recompose v0.9 / v0.9.1 / v0.9.3 rich labels
       // from current flags. Skip `ignored` (uses custom passive-aggressive text).
       if (tile.status === 'ignored') {
@@ -827,6 +835,15 @@ export class TerminalTracker implements vscode.Disposable {
     this.onChangeEmitter.fire();
   }
 
+  /** v0.13.4 (#4) — flip the pinned flag from the webview context menu. */
+  setPinned(id: number, pinned: boolean): void {
+    const tile = this.terminals.get(id);
+    if (!tile) return;
+    this.configManager.setPinned(tile.name, pinned);
+    tile.pinned = pinned;
+    this.onChangeEmitter.fire();
+  }
+
   updateContext(projectName: string, contextPercent: number): void {
     const tile = this.findMatchingTile(projectName);
     if (tile) {
@@ -836,33 +853,95 @@ export class TerminalTracker implements vscode.Disposable {
   }
 
   getTiles(): TileData[] {
-    const tiles = Array.from(this.terminals.values());
+    // v0.13.4 (#4) — pinned tiles live in a fixed-position zone at the
+    // bottom regardless of sortMode. Split, sort each group independently,
+    // concat unpinned-first.
+    const all = Array.from(this.terminals.values());
+    const unpinned = all.filter((t) => !t.pinned);
+    const pinned = all.filter((t) => t.pinned);
+
+    const manualSort = (a: TileData, b: TileData): number => {
+      const ao = this.configManager.getTerminal(a.name)?.order;
+      const bo = this.configManager.getTerminal(b.name)?.order;
+      if (ao === undefined && bo === undefined) return b.lastActivity - a.lastActivity;
+      if (ao === undefined) return 1;
+      if (bo === undefined) return -1;
+      return ao - bo;
+    };
+
+    // Pinned tiles always use manual `order` — the whole point of pinning is
+    // a stable position, so floating by status would defeat it.
+    pinned.sort(manualSort);
 
     if (this.configManager.getSortMode() === 'manual') {
-      tiles.sort((a, b) => {
-        const ao = this.configManager.getTerminal(a.name)?.order;
-        const bo = this.configManager.getTerminal(b.name)?.order;
-        // Unordered tiles sink to the bottom, most-recent first.
-        if (ao === undefined && bo === undefined) return b.lastActivity - a.lastActivity;
-        if (ao === undefined) return 1;
-        if (bo === undefined) return -1;
-        return ao - bo;
+      unpinned.sort(manualSort);
+    } else {
+      // Auto mode for unpinned: status-based with lastActivity tiebreak.
+      // error floats to the top (above waiting) — errors demand attention more
+      // than a tile that's just been waiting a while.
+      // offline sits below idle — Claude isn't running, nothing actionable.
+      const statusOrder: Record<string, number> = { error: 0, waiting: 1, ignored: 2, ready: 3, working: 4, done: 5, idle: 6, offline: 7 };
+      unpinned.sort((a, b) => {
+        const orderDiff = (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
+        if (orderDiff !== 0) return orderDiff;
+        return b.lastActivity - a.lastActivity;
       });
-      return tiles;
     }
 
-    // Auto mode: status-based with lastActivity tiebreak.
-    // error floats to the top (above waiting) — errors demand attention more
-    // than a tile that's just been waiting a while.
-    // offline sits below idle — Claude isn't running, nothing actionable.
-    const statusOrder: Record<string, number> = { error: 0, waiting: 1, ignored: 2, ready: 3, working: 4, done: 5, idle: 6, offline: 7 };
-    tiles.sort((a, b) => {
-      const orderDiff = (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
-      if (orderDiff !== 0) return orderDiff;
-      return b.lastActivity - a.lastActivity;
+    // v0.13.4 (#15) — registered (offline-but-launchable) tiles for every
+    // config entry not currently running. Live in their own zone at the
+    // very bottom, below pinned. Sorted by config `order` then slug.
+    const registered = this.configManager.getShowRegisteredProjects()
+      ? this.synthesizeRegisteredTiles(new Set(all.map((t) => t.name)))
+      : [];
+    registered.sort((a, b) => {
+      const ao = this.configManager.getTerminal(a.name)?.order;
+      const bo = this.configManager.getTerminal(b.name)?.order;
+      if (ao !== undefined && bo !== undefined && ao !== bo) return ao - bo;
+      if (ao !== undefined && bo === undefined) return -1;
+      if (ao === undefined && bo !== undefined) return 1;
+      return a.name.localeCompare(b.name);
     });
 
-    return tiles;
+    return [...unpinned, ...pinned, ...registered];
+  }
+
+  /**
+   * v0.13.4 (#15) — build dim/dashed tiles for every config entry that
+   * isn't currently running and isn't `hidden: true`. Click → launch.
+   *
+   * Synthetic ids are negative + stable per slug for the session, assigned
+   * lazily so the webview's diff-update can re-use the same DOM elements
+   * across renders without flicker.
+   */
+  private synthesizeRegisteredTiles(realNames: Set<string>): TileData[] {
+    const thresholds = this.configManager.getContextThresholds();
+    const out: TileData[] = [];
+    const all = this.configManager.getAll();
+    for (const [slug, cfg] of Object.entries(all)) {
+      if (realNames.has(slug)) continue;
+      if (cfg.hidden === true) continue;
+      let id = this.syntheticIds.get(slug);
+      if (id === undefined) {
+        id = this.nextSyntheticId--;
+        this.syntheticIds.set(slug, id);
+      }
+      out.push({
+        id,
+        name: slug,
+        displayName: cfg.nickname || slug,
+        status: 'registered',
+        statusLabel: this.configManager.getLabel('registered'),
+        lastActivity: 0,
+        isActive: false,
+        themeColor: getThemeColor(slug, cfg.color),
+        icon: cfg.icon ?? ICON_MAP[slug] ?? null,
+        contextWarn: thresholds.warn,
+        contextCrit: thresholds.crit,
+        pinned: false,
+      });
+    }
+    return out;
   }
 
   /**

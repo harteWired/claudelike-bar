@@ -120,7 +120,12 @@ export function buildLaunchCandidates(
   pathExists: (p: string) => boolean = cwdExists,
 ): LaunchCandidate[] {
   const all = configManager.getAll();
-  const openNames = new Set(tracker.getTiles().map((t) => t.name));
+  // v0.13.4 (#15): getTiles() now also returns synthesized "registered"
+  // tiles for entries that aren't running. Those should NOT count as
+  // already-open — they're exactly the candidates we want to surface.
+  const openNames = new Set(
+    tracker.getTiles().filter((t) => t.status !== 'registered').map((t) => t.name),
+  );
   const open: LaunchCandidate[] = [];
   for (const [slug, cfg] of Object.entries(all)) {
     if (openNames.has(slug)) continue;

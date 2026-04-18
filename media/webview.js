@@ -117,6 +117,8 @@ function diffUpdate(tiles) {
 
   // Update or create tiles in order
   let previousEl = null;
+  let previousPinned = false;
+  let previousRegistered = false;
   tiles.forEach((tile, index) => {
     let el = existingById.get(String(tile.id));
 
@@ -133,6 +135,15 @@ function diffUpdate(tiles) {
         el.classList.add('visible');
       });
     }
+
+    // v0.13.4 (#4) — first pinned tile gets a divider above it.
+    // v0.13.4 (#15) — first registered tile gets its own dashed divider.
+    const isPinned = tile.pinned === true;
+    const isRegistered = tile.status === 'registered';
+    el.classList.toggle('pinned-first', isPinned && !previousPinned && previousEl !== null);
+    el.classList.toggle('registered-first', isRegistered && !previousRegistered && previousEl !== null);
+    previousPinned = isPinned;
+    previousRegistered = isRegistered;
 
     // Ensure correct order
     if (previousEl) {
@@ -157,6 +168,7 @@ function patchTile(el, tile) {
   el.classList.toggle('status-ignored', tile.status === 'ignored');
   el.classList.toggle('status-error', tile.status === 'error');
   el.classList.toggle('status-offline', tile.status === 'offline');
+  el.classList.toggle('status-registered', tile.status === 'registered');
 
   // Theme color
   el.style.setProperty('--tile-color', tile.themeColor);
@@ -252,6 +264,7 @@ function createTileEl(tile, index) {
   const tileStatusClass = tile.status === 'ignored' ? ' status-ignored'
     : tile.status === 'error' ? ' status-error'
     : tile.status === 'offline' ? ' status-offline'
+    : tile.status === 'registered' ? ' status-registered'
     : '';
   el.className = `tile entering${tile.isActive ? ' active' : ''}${tileStatusClass}`;
   el.style.setProperty('--tile-color', tile.themeColor);
@@ -294,7 +307,13 @@ function createTileEl(tile, index) {
       suppressNextClick = false;
       return;
     }
-    vscode.postMessage({ type: 'switchTerminal', id: tile.id });
+    // v0.13.4 (#15) — registered (offline) tiles launch the project on
+    // click instead of switching to a (nonexistent) terminal.
+    if (tile.status === 'registered') {
+      vscode.postMessage({ type: 'launchByName', name: tile.name });
+    } else {
+      vscode.postMessage({ type: 'switchTerminal', id: tile.id });
+    }
   });
 
   el.addEventListener('contextmenu', (e) => {
@@ -423,14 +442,43 @@ function showContextMenu(e, tileId) {
   e.stopPropagation();
   dismissContextMenu();
 
+  const tile = currentTiles.find((t) => t.id === tileId);
+  const isRegistered = tile?.status === 'registered';
+
   const menu = document.createElement('div');
   menu.className = 'context-menu';
+
+  // v0.13.4 (#15) — registered (offline) tiles only get the launch
+  // action. Mark as done / Pin / Kill / Set color / Clone don't apply to
+  // a tile with no underlying terminal yet. The user can pin/color the
+  // entry by editing the JSONC config directly until the terminal exists.
+  if (isRegistered) {
+    const launchItem = menuItem('\uD83D\uDE80', 'Launch this project', () => {
+      vscode.postMessage({ type: 'launchByName', name: tile.name });
+    });
+    menu.appendChild(launchItem);
+    document.body.appendChild(menu);
+    positionAndShowMenu(menu, e);
+    return;
+  }
 
   // Mark as done — silences judgement for inactive terminals
   const doneItem = menuItem('\u2713', 'Mark as done', () => {
     vscode.postMessage({ type: 'markDone', id: tileId });
   });
   menu.appendChild(doneItem);
+
+  // v0.13.4 (#4) — Pin / Unpin. Pinned tiles live in a fixed-position
+  // zone at the bottom of the bar regardless of sortMode. Label flips
+  // based on current state.
+  const tile = currentTiles.find((t) => t.id === tileId);
+  const isPinned = tile?.pinned === true;
+  const pinIcon = isPinned ? '\uD83D\uDCCD' : '\uD83D\uDCCC'; // 📍 / 📌
+  const pinLabel = isPinned ? 'Unpin tile' : 'Pin tile';
+  const pinItem = menuItem(pinIcon, pinLabel, () => {
+    vscode.postMessage({ type: 'setPinned', id: tileId, pinned: !isPinned });
+  });
+  menu.appendChild(pinItem);
 
   // v0.12 — Mute / Unmute audio. Label flips based on current state so the
   // user always sees the action they're about to take. Posts `toggleAudio`
@@ -530,6 +578,11 @@ function showContextMenu(e, tileId) {
 
   // Position
   document.body.appendChild(menu);
+  positionAndShowMenu(menu, e);
+}
+
+/** Position the context menu inside the viewport and assign as active. */
+function positionAndShowMenu(menu, e) {
   const rect = menu.getBoundingClientRect();
   let x = e.clientX;
   let y = e.clientY;
@@ -537,7 +590,6 @@ function showContextMenu(e, tileId) {
   if (y + rect.height > window.innerHeight) y = window.innerHeight - rect.height - 4;
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
-
   activeMenu = menu;
 }
 

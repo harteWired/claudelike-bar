@@ -408,7 +408,7 @@
 
 <div class="container">
 
-  <h1>Claudelike Bar <span style="color: var(--vscode-descriptionForeground); font-weight: 400;">— v0.13.3</span></h1>
+  <h1>Claudelike Bar <span style="color: var(--vscode-descriptionForeground); font-weight: 400;">— v0.13.4</span></h1>
   <p class="tagline">Live status tiles for every Claude Code terminal. <a href="https://github.com/aes87/claudelike-bar">github.com/aes87/claudelike-bar</a> · <a href="https://open-vsx.org/extension/aes87/claudelike-bar">Open VSX</a></p>
 
   <!-- =============================================================== -->
@@ -558,6 +558,16 @@
   <!-- =============================================================== -->
 
   <div class="feature-row">
+
+    <div class="feature-card">
+      <h3>Offline tiles for every registered project <span class="badge">v0.13.4</span></h3>
+      <p>The bar used to show only currently-running terminals — registered projects you hadn't opened yet were invisible outside the JSONC config. Now every config entry renders as a dim, dashed, click-to-launch tile in its own zone at the bottom of the bar. Glance → click → launch → tile becomes live. Per-entry <code>hidden: true</code> opt-out for archived projects you want to keep registered but not see; <code>showRegisteredProjects: false</code> at the top level disables the whole zone if you preferred the prior behavior.</p>
+    </div>
+
+    <div class="feature-card">
+      <h3>Pinned tiles <span class="badge">v0.13.4</span></h3>
+      <p>Right-click a tile → <strong>Pin tile</strong> to fix it in a stable bottom zone, regardless of <code>sortMode</code>. Useful for monitoring/infra terminals you want at known coordinates while urgent project tiles still float to the top by status. The pinned zone is sorted by drag <code>order</code>, so within the zone you control the layout.</p>
+    </div>
 
     <div class="feature-card">
       <h3>WSL2 / SSH / Dev Containers / Codespaces <span class="badge">v0.13.3</span></h3>

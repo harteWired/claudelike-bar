@@ -436,6 +436,14 @@ function showContextMenu(e, tileId) {
   });
   menu.appendChild(audioItem);
 
+  // v0.13 — launch another registered project. Workflow action (not
+  // per-tile state), so it sits below Mute/Unmute and above the
+  // separator before Clone Terminal.
+  const launchItem = menuItem('\uD83D\uDE80', 'Launch another project…', () => {
+    vscode.postMessage({ type: 'launchProject' });
+  });
+  menu.appendChild(launchItem);
+
   // Separator
   menu.appendChild(menuSeparator());
 

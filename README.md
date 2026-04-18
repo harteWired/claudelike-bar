@@ -196,7 +196,8 @@ All commands are available from the command palette (`Cmd+Shift+P` / `Ctrl+Shift
 | Command | What It Does |
 |---------|-------------|
 | **Set Up Projects** | 5-step setup wizard — pick folders, name projects, assign colors, choose command, review. Best for first-time setup or reconfiguring after an upgrade. |
-| **Register Project** | Add a project and open it immediately — folder picker, slug assignment, terminal opens with Claude running. Also the "+" button in the sidebar header. |
+| **Register Project** | Add a project — folder picker, slug assignment, then asks whether to open the terminal now or just register it for later. Also the "+" button in the sidebar header. |
+| **Launch Registered Project** | Open any registered project that isn't already running. QuickPick of your config entries; picks routes through the same launch path as auto-start. Also the rocket icon in the sidebar header and "Launch another project…" in the tile context menu. |
 | **Open Config** | Opens `~/.claude/claudelike-bar.jsonc` in the editor. Also available as the gear icon in the sidebar header. |
 | **Install Hooks** | Copies the hook script to `~/.claude/hooks/` and registers event handlers in `~/.claude/settings.json`. Idempotent. |
 | **Install Statusline** | Installs the optional context % statusline script. Prompts before replacing an existing statusline. |
@@ -219,6 +220,8 @@ Claude will read `~/.claude/claudelike-bar.jsonc`, make the change, and the exte
 ### Manual configuration
 
 All settings live in `~/.claude/claudelike-bar.jsonc` — a single global file next to your Claude Code hooks and settings. Auto-created when you first open a terminal or run the setup wizard.
+
+You don't have to launch a terminal at registration time. The Register Project flow ends with a "Open terminal now / Register only" choice — pick "Register only" to add the entry with `autoStart: false` and open it later via **Launch Registered Project** (sidebar rocket icon, command palette, or the tile right-click menu).
 
 The file supports comments and is organized into sections:
 

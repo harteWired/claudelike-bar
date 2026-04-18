@@ -12,6 +12,7 @@ import {
   executeStatuslineRestoreCommand,
 } from './statusline';
 import { executeRegisterProjectCommand } from './registerProject';
+import { executeLaunchProjectCommand, launchRegisteredProject } from './launchProject';
 import { showOnboardingNotification, isSetupComplete } from './onboarding';
 import { runSetupWizard } from './wizard';
 import { readExtensionVersion, soundsDir } from './claudePaths';
@@ -90,7 +91,11 @@ export function activate(context: vscode.ExtensionContext) {
   );
   const registerProjectCmd = vscode.commands.registerCommand(
     'claudeDashboard.registerProject',
-    () => executeRegisterProjectCommand(configManager, (m) => log(m)),
+    () => executeRegisterProjectCommand(configManager, tracker, (m) => log(m)),
+  );
+  const launchProjectCmd = vscode.commands.registerCommand(
+    'claudeDashboard.launchProject',
+    () => executeLaunchProjectCommand(configManager, tracker, (m) => log(m)),
   );
   const setupProjectsCmd = vscode.commands.registerCommand(
     'claudeDashboard.setupProjects',
@@ -259,6 +264,10 @@ export function activate(context: vscode.ExtensionContext) {
       case 'toggleAudio':
         vscode.commands.executeCommand('claudeDashboard.toggleAudio');
         break;
+
+      case 'launchProject':
+        vscode.commands.executeCommand('claudeDashboard.launchProject');
+        break;
     }
   };
 
@@ -311,6 +320,7 @@ export function activate(context: vscode.ExtensionContext) {
     installStatuslineCmd,
     restoreStatuslineCmd,
     registerProjectCmd,
+    launchProjectCmd,
     setupProjectsCmd,
     showHooksCmd,
     toggleAudioCmd,
@@ -366,26 +376,12 @@ function runAutoStart(
   const autoStartNames = configManager.getAutoStartTerminals();
   log(`auto-starting ${autoStartNames.length} terminal(s): ${autoStartNames.join(', ')}`);
 
+  // Delegate per-name to the shared helper so auto-start and the
+  // "Launch Registered Project" command can't drift in their createTerminal
+  // wiring. The helper logs the "already open" case itself; nothing else
+  // belongs in this loop.
   for (const name of autoStartNames) {
-    if (tracker.getTerminalByName(name)) {
-      log(`  ${name} → revived (skip)`);
-      continue;
-    }
-    const opts = configManager.getAutoStartTerminalOptions(name);
-    const terminal = vscode.window.createTerminal({
-      name,
-      env: opts.env,
-      ...(opts.cwd ? { cwd: opts.cwd } : {}),
-      ...(opts.shellPath ? { shellPath: opts.shellPath } : {}),
-      ...(opts.shellArgs ? { shellArgs: opts.shellArgs } : {}),
-    });
-    const command = configManager.getAutoStartCommand(name);
-    if (command) {
-      log(`  ${name} → ${command}${opts.cwd ? ` [cwd: ${opts.cwd}]` : ''}${opts.shellPath ? ` [shell: ${opts.shellPath}]` : ''}`);
-      terminal.sendText(command);
-    } else {
-      log(`  ${name} → (no command)${opts.cwd ? ` [cwd: ${opts.cwd}]` : ''}${opts.shellPath ? ` [shell: ${opts.shellPath}]` : ''}`);
-    }
+    launchRegisteredProject(configManager, tracker, name, log);
   }
 }
 

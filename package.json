@@ -94,6 +94,12 @@
         "category": "Claudelike Bar"
       },
       {
+        "command": "claudeDashboard.launchProject",
+        "title": "Launch Registered Project",
+        "icon": "$(rocket)",
+        "category": "Claudelike Bar"
+      },
+      {
         "command": "claudeDashboard.setupProjects",
         "title": "Set Up Projects",
         "category": "Claudelike Bar"
@@ -116,6 +122,11 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "claudeDashboard.launchProject",
+          "when": "view == claudeDashboard.mainView",
+          "group": "navigation"
+        },
         {
           "command": "claudeDashboard.registerProject",
           "when": "view == claudeDashboard.mainView",

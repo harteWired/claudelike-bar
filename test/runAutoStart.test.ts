@@ -4,17 +4,20 @@ import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ConfigManager } from '../src/configManager';
+import { TerminalTracker } from '../src/terminalTracker';
+import { launchRegisteredProject } from '../src/launchProject';
+
+vi.mock('vscode', () => import('./__mocks__/vscode'));
 
 /**
- * End-to-end wiring test for the v0.9.2 cross-platform auto-start path.
- * Exercises the real ConfigManager against the real vscode mock; asserts that
- * the options flowing into createTerminal no longer depend on shell syntax —
- * CLAUDELIKE_BAR_NAME comes via the env option, and shellPath/shellArgs are
- * forwarded when the config sets them.
- *
- * The runAutoStart function is unexported from extension.ts (it's an impl
- * detail); we re-implement the same shape here so the contract is pinned
- * in one place and any drift in extension.ts shows up as a failing test.
+ * End-to-end wiring test for the v0.9.2 cross-platform auto-start path —
+ * v0.13: now exercises the extracted `launchRegisteredProject` helper that
+ * both `runAutoStart` and the new "Launch Registered Project" command call
+ * through. The contract being pinned: the options flowing into
+ * createTerminal don't depend on shell syntax — CLAUDELIKE_BAR_NAME comes
+ * via the env option, and shellPath/shellArgs are forwarded when the config
+ * sets them. Calling the real helper means any drift in extension.ts will
+ * surface here without any test-side mirror to maintain.
  */
 
 interface CreateTerminalOptions {
@@ -29,39 +32,26 @@ function captureCreateTerminalCalls(): CreateTerminalOptions[] {
   const calls: CreateTerminalOptions[] = [];
   (vscode.window.createTerminal as any).mockImplementation((opts: any) => {
     calls.push(opts);
-    return { name: opts?.name, sendText: vi.fn(), dispose: vi.fn() };
+    return { name: opts?.name, sendText: vi.fn(), show: vi.fn(), dispose: vi.fn() };
   });
   return calls;
 }
 
-/**
- * Mirror of the extension.ts runAutoStart body — kept in sync by assertion,
- * not by import, so that the test validates the CONTRACT (what args flow
- * into createTerminal) rather than the implementation.
- */
-function runAutoStartLike(cm: ConfigManager, names: string[]): void {
-  for (const name of names) {
-    const opts = cm.getAutoStartTerminalOptions(name);
-    vscode.window.createTerminal({
-      name,
-      env: opts.env,
-      ...(opts.cwd ? { cwd: opts.cwd } : {}),
-      ...(opts.shellPath ? { shellPath: opts.shellPath } : {}),
-      ...(opts.shellArgs ? { shellArgs: opts.shellArgs } : {}),
-    });
-  }
-}
+const noopLog = () => {};
 
-describe('runAutoStart → createTerminal contract', () => {
+describe('runAutoStart → createTerminal contract (via launchRegisteredProject)', () => {
   let tmpWorkspace: string;
   let cm: ConfigManager;
+  let tracker: TerminalTracker;
 
   beforeEach(() => {
     tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'auto-start-test-'));
     (vscode.window.createTerminal as any).mockReset();
+    (vscode.window.terminals as any).length = 0;
   });
 
   afterEach(() => {
+    if (tracker) tracker.dispose();
     if (cm) cm.dispose();
     fs.rmSync(tmpWorkspace, { recursive: true, force: true });
   });
@@ -78,7 +68,14 @@ describe('runAutoStart → createTerminal contract', () => {
       { uri: (vscode.Uri as any).file(tmpWorkspace), name: 'test', index: 0 },
     ];
     cm = new ConfigManager(path.join(tmpWorkspace, '.claudelike-bar.jsonc'));
+    tracker = new TerminalTracker(cm, noopLog);
     return cm;
+  }
+
+  function runAutoStartLike(cm: ConfigManager, names: string[]): void {
+    for (const name of names) {
+      launchRegisteredProject(cm, tracker, name, noopLog);
+    }
   }
 
   it('passes CLAUDELIKE_BAR_NAME env through createTerminal (not sendText)', () => {

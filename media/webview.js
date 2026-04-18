@@ -470,8 +470,8 @@ function showContextMenu(e, tileId) {
 
   // v0.13.4 (#4) — Pin / Unpin. Pinned tiles live in a fixed-position
   // zone at the bottom of the bar regardless of sortMode. Label flips
-  // based on current state.
-  const tile = currentTiles.find((t) => t.id === tileId);
+  // based on current state. (`tile` was looked up at the top for the
+  // registered-tile check; reuse it.)
   const isPinned = tile?.pinned === true;
   const pinIcon = isPinned ? '\uD83D\uDCCD' : '\uD83D\uDCCC'; // 📍 / 📌
   const pinLabel = isPinned ? 'Unpin tile' : 'Pin tile';

@@ -13,6 +13,9 @@ let dropIndicatorEl = null;
 /** v0.12 — most recent audio.enabled state from the extension host. Used to
  * label the tile context-menu toggle as "Mute Audio" / "Unmute Audio". */
 let audioEnabled = false;
+/** v0.13.1 — most recent sortMode from the extension host. Controls whether
+ * the "Switch to auto sort" tile context-menu entry appears. */
+let sortMode = 'auto';
 
 // Handle messages from extension
 window.addEventListener('message', (event) => {
@@ -22,6 +25,9 @@ window.addEventListener('message', (event) => {
     currentTiles = message.tiles;
     if (typeof message.audioEnabled === 'boolean') {
       audioEnabled = message.audioEnabled;
+    }
+    if (message.sortMode === 'auto' || message.sortMode === 'manual') {
+      sortMode = message.sortMode;
     }
   } else if (message.type === 'play') {
     // v0.12 — play a sound via HTML5 audio. The extension has already
@@ -443,6 +449,16 @@ function showContextMenu(e, tileId) {
     vscode.postMessage({ type: 'launchProject' });
   });
   menu.appendChild(launchItem);
+
+  // v0.13.1 — "Switch to auto sort" only appears when we're in manual
+  // mode. In auto mode the option is a no-op, so we omit it rather than
+  // gray-out — keeps the menu tight.
+  if (sortMode === 'manual') {
+    const autoSortItem = menuItem('\u21C5', 'Switch to auto sort', () => {
+      vscode.postMessage({ type: 'setSortMode', mode: 'auto' });
+    });
+    menu.appendChild(autoSortItem);
+  }
 
   // Separator
   menu.appendChild(menuSeparator());

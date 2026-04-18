@@ -138,6 +138,9 @@ describe('runAutoStart → createTerminal contract (via launchRegisteredProject)
   });
 
   it('forwards cwd through createTerminal API (cross-platform, no cd && needed)', () => {
+    // v0.13.1 (#13): cwd must exist on disk for the pre-flight check. Uses
+    // the real tmpWorkspace so the forwarding assertion (the actual
+    // contract under test) fires regardless of the platform running CI.
     writeConfig({
       terminals: {
         'win-proj': {
@@ -145,7 +148,7 @@ describe('runAutoStart → createTerminal contract (via launchRegisteredProject)
           icon: null,
           nickname: null,
           autoStart: true,
-          cwd: 'C:\\Users\\me\\projects\\win-proj',
+          cwd: tmpWorkspace,
         },
       },
     });
@@ -153,9 +156,29 @@ describe('runAutoStart → createTerminal contract (via launchRegisteredProject)
 
     runAutoStartLike(makeCm(), ['win-proj']);
 
-    expect(calls[0].cwd).toBe('C:\\Users\\me\\projects\\win-proj');
+    expect(calls[0].cwd).toBe(tmpWorkspace);
     expect(calls[0].env?.CLAUDELIKE_BAR_NAME).toBe('win-proj');
     expect(calls[0].shellPath).toBeUndefined();
+  });
+
+  it('(#13) skips entries whose cwd does not exist on disk — no createTerminal call', () => {
+    writeConfig({
+      terminals: {
+        'moved-proj': {
+          color: 'cyan',
+          icon: null,
+          nickname: null,
+          autoStart: true,
+          cwd: path.join(tmpWorkspace, 'does-not-exist-ever'),
+        },
+      },
+    });
+    const calls = captureCreateTerminalCalls();
+
+    runAutoStartLike(makeCm(), ['moved-proj']);
+
+    // Pre-flight killed it before VS Code would've thrown its modal error.
+    expect(calls).toHaveLength(0);
   });
 
   it('handles names with special shell-meta characters safely', () => {

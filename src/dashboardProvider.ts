@@ -59,8 +59,8 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
 
   onMessage?: (message: WebviewMessage) => void;
 
-  updateTiles(tiles: TileData[], audioEnabled = false): void {
-    this.view?.webview.postMessage({ type: 'update', tiles, audioEnabled });
+  updateTiles(tiles: TileData[], audioEnabled = false, sortMode: 'auto' | 'manual' = 'auto'): void {
+    this.view?.webview.postMessage({ type: 'update', tiles, audioEnabled, sortMode });
   }
 
   /**

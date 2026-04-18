@@ -85,6 +85,7 @@ export type WebviewMessage =
   | { type: 'setupProjects' }
   | { type: 'toggleAudio' }
   | { type: 'launchProject' }
+  | { type: 'setSortMode'; mode: 'auto' | 'manual' }
   // v0.12 — webview → extension acks after an audio play attempt. Only the
   // internal __firePlayForTest command consumes these; production code
   // ignores them. Kept always-on so the CI smoke test doesn't need a

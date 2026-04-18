@@ -12,7 +12,7 @@ import {
   executeStatuslineRestoreCommand,
 } from './statusline';
 import { executeRegisterProjectCommand } from './registerProject';
-import { executeLaunchProjectCommand, launchRegisteredProject } from './launchProject';
+import { executeLaunchProjectCommand, launchRegisteredProject, cwdExists } from './launchProject';
 import { showOnboardingNotification, isSetupComplete } from './onboarding';
 import { runSetupWizard } from './wizard';
 import { readExtensionVersion, soundsDir } from './claudePaths';
@@ -112,7 +112,7 @@ export function activate(context: vscode.ExtensionContext) {
   // round-trip.
   const refreshTiles = () => {
     const tiles = tracker.getTiles();
-    provider.updateTiles(tiles, configManager.isAudioEnabled());
+    provider.updateTiles(tiles, configManager.isAudioEnabled(), configManager.getSortMode());
   };
 
   // v0.12 — audio commands.
@@ -272,6 +272,11 @@ export function activate(context: vscode.ExtensionContext) {
       case 'launchProject':
         vscode.commands.executeCommand('claudeDashboard.launchProject');
         break;
+
+      case 'setSortMode':
+        configManager.setSortMode(message.mode);
+        refreshTiles();
+        break;
     }
   };
 
@@ -380,12 +385,36 @@ function runAutoStart(
   const autoStartNames = configManager.getAutoStartTerminals();
   log(`auto-starting ${autoStartNames.length} terminal(s): ${autoStartNames.join(', ')}`);
 
+  // v0.13.1 (#13) — pre-check cwds so we can surface ONE friendly toast
+  // rather than N modal VS Code errors if the user has stale entries
+  // (moved/renamed/deleted project dirs). The helper re-checks as a safety
+  // net for any direct callers.
+  const skippedForMissingCwd: string[] = [];
+  for (const name of autoStartNames) {
+    const opts = configManager.getAutoStartTerminalOptions(name);
+    if (opts.cwd && !cwdExists(opts.cwd)) skippedForMissingCwd.push(name);
+  }
+
   // Delegate per-name to the shared helper so auto-start and the
   // "Launch Registered Project" command can't drift in their createTerminal
-  // wiring. The helper logs the "already open" case itself; nothing else
-  // belongs in this loop.
+  // wiring. The helper logs the "already open" and "missing cwd" cases
+  // itself; nothing else belongs in this loop.
   for (const name of autoStartNames) {
     launchRegisteredProject(configManager, tracker, name, log);
+  }
+
+  if (skippedForMissingCwd.length > 0) {
+    const list = skippedForMissingCwd.map((n) => `"${n}"`).join(', ');
+    vscode.window
+      .showWarningMessage(
+        `Claudelike Bar skipped ${skippedForMissingCwd.length} auto-start terminal(s) with missing paths: ${list}. Edit the config to fix or remove them.`,
+        'Open Config',
+      )
+      .then((pick) => {
+        if (pick === 'Open Config') {
+          vscode.commands.executeCommand('claudeDashboard.openConfig');
+        }
+      });
   }
 }
 

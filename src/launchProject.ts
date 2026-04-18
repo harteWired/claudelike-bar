@@ -6,6 +6,15 @@ import { TerminalTracker } from './terminalTracker';
 type LogFn = (msg: string | (() => string)) => void;
 
 /**
+ * Guarded fs.existsSync — returns false on any permission/IO error rather
+ * than throwing. Used by both launchRegisteredProject (safety net) and
+ * buildLaunchCandidates (filter).
+ */
+export function cwdExists(p: string): boolean {
+  try { return fs.existsSync(p); } catch { return false; }
+}
+
+/**
  * v0.13 — canonical launch path. Both the auto-start loop and the new
  * "Launch Registered Project" command call through this so there's one
  * source of truth for how a registered terminal gets created.
@@ -34,6 +43,17 @@ export function launchRegisteredProject(
   }
 
   const opts = configManager.getAutoStartTerminalOptions(name);
+
+  // v0.13.1 (#13) — pre-flight: if cwd is set but doesn't exist, skip.
+  // VS Code otherwise throws a modal "Starting directory does not exist"
+  // at the user. Both auto-start (batch, many entries) and the launcher
+  // QuickPick (already filters missing paths, but cwd can diverge from
+  // path) benefit from this guard.
+  if (opts.cwd && !cwdExists(opts.cwd)) {
+    log(`launch: ${name} skipped — cwd "${opts.cwd}" does not exist`);
+    return undefined;
+  }
+
   const terminal = vscode.window.createTerminal({
     name,
     env: opts.env,
@@ -97,9 +117,7 @@ function sortCandidates(
 export function buildLaunchCandidates(
   configManager: ConfigManager,
   tracker: TerminalTracker,
-  pathExists: (p: string) => boolean = (p) => {
-    try { return fs.existsSync(p); } catch { return false; }
-  },
+  pathExists: (p: string) => boolean = cwdExists,
 ): LaunchCandidate[] {
   const all = configManager.getAll();
   const openNames = new Set(tracker.getTiles().map((t) => t.name));

@@ -1188,7 +1188,7 @@
     <section class="hero" aria-label="Hero">
       <div class="hero__content">
         <div class="hero__text">
-          <p class="hero__overline">VS Code Extension <span class="version">v0.14.1</span></p>
+          <p class="hero__overline">VS Code Extension <span class="version">v0.15.0</span></p>
           <h1 class="hero__headline" data-split="words">Live status tiles for every <em>Claude Code</em> terminal.</h1>
           <p class="hero__subhead">A sidebar that shows what every Claude is doing at a glance — animated dots, color-coded borders, drag-to-reorder, context-window tracking, and a passive-aggressive mode that guilt-trips you when you ignore it.</p>
           <div class="hero__cta">
@@ -1346,7 +1346,7 @@
       <div class="section__container">
         <header class="section__header">
           <p class="section__overline">Features over time</p>
-          <h2 class="section__heading" id="changelog-heading">Fifteen days, thirteen versions.</h2>
+          <h2 class="section__heading" id="changelog-heading">Sixteen days, fifteen versions.</h2>
           <p class="section__description">First commit went up on April 4, 2026. This is where the bar has traveled since — from first push to now.</p>
         </header>
 
@@ -1442,6 +1442,29 @@
               <li><strong>Remote everywhere</strong> (v0.13.3) — <code>extensionKind: ["workspace", "ui"]</code> so WSL2, SSH, Dev Containers, and Codespaces all register hooks to the right <code>~/.claude/</code>.</li>
               <li><strong>Pinned &amp; offline tiles</strong> (v0.13.4) — pin a tile to a stable bottom zone; registered-but-not-open projects show as dim click-to-launch tiles.</li>
               <li><strong>Hotfix</strong> (v0.13.5) — webview.js parse error introduced by v0.13.4.</li>
+            </ul>
+          </li>
+
+          <li class="changelog__entry">
+            <div class="changelog__marker"><span>0.14</span></div>
+            <h3>New-user smoothness <span class="version-tag">Apr 19 · Day 16</span></h3>
+            <p>A batch aimed at the first-run experience, plus a subagent-counter drift fix. Install from a fresh devcontainer and the bar just works — bundled chime, legacy-hook cleanup, self-diagnosing health check.</p>
+            <ul>
+              <li><strong>Bundled chimes &amp; slot rename</strong> (v0.14.0) — <code>audio.sounds.ready</code>/<code>permission</code> → <code>turnDone</code>/<code>midJobPrompt</code> (read-side shim migrates on first save). Two chimes ship in <code>media/sounds/</code> (Mixkit + Pixabay, CC0) so <em>Toggle Audio</em> works without sourcing a file.</li>
+              <li><strong>Legacy hook cleanup &amp; Diagnose command</strong> (v0.14.0) — one-shot toast offers to remove old <code>notify.sh</code>/<code>notify-silent.sh</code> hook registrations; <em>Claudelike Bar: Diagnose</em> runs five read-only health checks and toasts only when the fingerprint differs from last session.</li>
+              <li><strong>Dev Containers install docs</strong> (v0.14.0) — new <code>docs/install.md</code> section with a self-healing <code>postAttachCommand</code> snippet. No-cache rebuilds no longer drop the extension silently.</li>
+              <li><strong>Subagent counter drift fix</strong> (v0.14.1, #16) — tiles no longer wedge on "Working (N agents)". Root cause: the single-file status bus coalesces rapid SubagentStop writes under FileSystemWatcher's debounce, permanently inflating the derived <code>pendingSubagents</code> counter. Fix: zero the counter on every parent <code>Stop</code>, which is the authoritative end-of-turn signal.</li>
+            </ul>
+          </li>
+
+          <li class="changelog__entry">
+            <div class="changelog__marker"><span>0.15</span></div>
+            <h3>Marketplace first-publish <span class="version-tag">Apr 19 · Day 16</span></h3>
+            <p>The bar is now live on the Visual Studio Marketplace alongside Open VSX — one install URL for every VS Code distribution. Two bug fixes rolled in.</p>
+            <ul>
+              <li><strong>False-offline suppression</strong> (#20) — a tile whose status file is freshly written by a running session no longer renders as the dim "registered/offline" tile just because the tracker hasn't associated a VS Code terminal with that slug. The status file is consulted as a liveness tiebreaker before synthesizing.</li>
+              <li><strong>Clone terminals stay transient</strong> (#17) — <em>Clone terminal</em> from the right-click menu no longer writes a permanent config entry for the <code>(copy)</code>-suffixed clone. Close the clone and it's gone; no dead registered tile left behind.</li>
+              <li><strong>Marketplace listing</strong> — <code>marketplace.visualstudio.com/items?itemName=aes87.claudelike-bar</code>.</li>
             </ul>
           </li>
 

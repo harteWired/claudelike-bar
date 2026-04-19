@@ -1,6 +1,31 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
 import { TileData, SessionStatus, HookStatusSignal, ICON_MAP, getThemeColor, StateTransition } from './types';
 import { ConfigManager } from './configManager';
+import { getStatusDir } from './statusDir';
+
+// v0.15.0 (#20) — how recently a status JSON must have been written for the
+// tracker to treat its slug as "live" when deciding whether to suppress a
+// registered-tile synthesis. 60s matches the state-machine's ready→waiting
+// timer; shorter threshold risks false suppression during a quiet Stop→idle
+// lull, longer risks showing a false-live tile for a slug whose hook is
+// stale from a crashed session.
+const STATUS_FRESH_MS = 60_000;
+
+// Status values that mean "Claude is not actively running" — suppression of
+// the registered tile doesn't apply to these. `idle` is included because a
+// fresh idle file just means the hook fired on session start/end; the slug
+// isn't "live" in the sense of having active Claude work.
+const NON_LIVE_STATUSES = new Set(['offline', 'idle']);
+
+// v0.15.0 (#17) — VS Code's "Clone terminal" action names new terminals
+// `<parent> (copy)`. Repeated clones append further `(copy)` suffixes. These
+// are transient by intent — the user isn't registering a project, they're
+// forking a shell. Matching this pattern lets us skip the auto-ensureEntry
+// call so clones don't pollute `claudelike-bar.jsonc` with throwaway entries
+// that survive the session as permanent registered tiles.
+const CLONE_SUFFIX_RE = / \(copy\)(?: \(copy\))*$/;
 
 export class TerminalTracker implements vscode.Disposable {
   private terminals = new Map<number, TileData>();
@@ -19,6 +44,8 @@ export class TerminalTracker implements vscode.Disposable {
   private nameRefreshIdleCycles = 0;
   private configManager: ConfigManager;
   private log: (msg: string | (() => string)) => void;
+  // v0.15.0 (#20) — status dir path, overridable for tests.
+  private statusDir: string;
 
   // State machine timers: ready → waiting after 60s
   private readyTimers = new Map<number, NodeJS.Timeout>();
@@ -32,9 +59,14 @@ export class TerminalTracker implements vscode.Disposable {
   private syntheticIds = new Map<string, number>();
   private nextSyntheticId = -1;
 
-  constructor(configManager: ConfigManager, log?: (msg: string | (() => string)) => void) {
+  constructor(
+    configManager: ConfigManager,
+    log?: (msg: string | (() => string)) => void,
+    statusDirOverride?: string,
+  ) {
     this.configManager = configManager;
     this.log = log ?? (() => {});
+    this.statusDir = statusDirOverride ?? getStatusDir();
     // Track existing terminals
     for (const terminal of vscode.window.terminals) {
       this.addTerminal(terminal);
@@ -66,8 +98,13 @@ export class TerminalTracker implements vscode.Disposable {
     const name = terminal.name;
     if (name === 'bash' || name === 'zsh' || name === 'sh') return;
 
-    // Auto-populate config file entry
-    this.configManager.ensureEntry(name);
+    // v0.15.0 (#17) — VS Code "Clone terminal" produces `<parent> (copy)`
+    // names. Don't write these to config: they're transient, and persisting
+    // them leaves dead entries that render as registered tiles after the
+    // clone is closed. The in-memory tile still tracks normally.
+    if (!CLONE_SUFFIX_RE.test(name)) {
+      this.configManager.ensureEntry(name);
+    }
     const cfg = this.configManager.getTerminal(name);
     const thresholds = this.configManager.getContextThresholds();
 
@@ -202,7 +239,10 @@ export class TerminalTracker implements vscode.Disposable {
             this.terminals.delete(id);
             this.terminalRefs.delete(id);
           } else {
-            this.configManager.ensureEntry(name);
+            // v0.15.0 (#17) — don't persist clone-suffixed names to config.
+            if (!CLONE_SUFFIX_RE.test(name)) {
+              this.configManager.ensureEntry(name);
+            }
             const cfg = this.configManager.getTerminal(name);
             tile.name = name;
             tile.displayName = cfg?.nickname || name;
@@ -928,6 +968,28 @@ export class TerminalTracker implements vscode.Disposable {
   }
 
   /**
+   * v0.15.0 (#20) — read the status JSON for a slug and decide if its
+   * last-written state looks "live" (not idle/offline and recent enough).
+   * A true result means a registered-tile synthesis for this slug would
+   * show `offline` while Claude is actually running there, so the caller
+   * should suppress it. Any IO/parse error returns false — safer to show
+   * the registered tile than hide it on a hunch.
+   */
+  private isSlugLive(slug: string): boolean {
+    try {
+      const filePath = path.join(this.statusDir, `${slug}.json`);
+      const stat = fs.statSync(filePath);
+      if (Date.now() - stat.mtimeMs > STATUS_FRESH_MS) return false;
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const data = JSON.parse(raw) as { status?: string };
+      if (!data.status) return false;
+      return !NON_LIVE_STATUSES.has(data.status);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * v0.13.4 (#15) — build dim/dashed tiles for every config entry that
    * isn't currently running and isn't `hidden: true`. Click → launch.
    *
@@ -942,6 +1004,17 @@ export class TerminalTracker implements vscode.Disposable {
     for (const [slug, cfg] of Object.entries(all)) {
       if (realNames.has(slug)) continue;
       if (cfg.hidden === true) continue;
+      // v0.15.0 (#20) — a slug with a fresh non-idle status file is running
+      // somewhere; the tracker just hasn't associated a VS Code terminal
+      // with it (common cause: CLAUDELIKE_BAR_NAME env var routes the hook
+      // to this slug but the terminal's VS Code name differs). Showing a
+      // dim "offline" tile for a slug that's actively writing `working`
+      // status is actively misleading — suppress the synthesis instead.
+      // Log it so state drift still surfaces in the debug output.
+      if (this.isSlugLive(slug)) {
+        this.log(() => `drift ${slug}: fresh status file but no tracked terminal — suppressing registered tile`);
+        continue;
+      }
       let id = this.syntheticIds.get(slug);
       if (id === undefined) {
         id = this.nextSyntheticId--;

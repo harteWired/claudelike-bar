@@ -251,6 +251,157 @@ describe('TerminalTracker.getTiles — registered (offline) tiles (#15)', () => 
   });
 });
 
+describe('TerminalTracker.synthesizeRegisteredTiles — status freshness (#20)', () => {
+  let STATUS_DIR: string;
+
+  beforeEach(() => {
+    STATUS_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'status-dir-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(STATUS_DIR, { recursive: true, force: true });
+  });
+
+  function writeStatus(slug: string, status: string, ageMs = 0) {
+    const file = path.join(STATUS_DIR, `${slug}.json`);
+    fs.writeFileSync(file, JSON.stringify({ project: slug, status, timestamp: Date.now() }));
+    if (ageMs > 0) {
+      const t = (Date.now() - ageMs) / 1000;
+      fs.utimesSync(file, t, t);
+    }
+  }
+
+  it('suppresses registered tile when status file is fresh and working', () => {
+    writeConfig({ terminals: { 'api': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    writeStatus('api', 'working');
+    // No VS Code terminal named 'api' — would normally synthesize a registered tile.
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm, undefined, STATUS_DIR);
+
+    const tiles = tracker.getTiles();
+    expect(tiles.find((t) => t.name === 'api')).toBeUndefined();
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('still synthesizes when status file is absent', () => {
+    writeConfig({ terminals: { 'api': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm, undefined, STATUS_DIR);
+
+    expect(tracker.getTiles().find((t) => t.name === 'api')?.status).toBe('registered');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('still synthesizes when status is idle (not actively live)', () => {
+    writeConfig({ terminals: { 'api': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    writeStatus('api', 'idle');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm, undefined, STATUS_DIR);
+
+    expect(tracker.getTiles().find((t) => t.name === 'api')?.status).toBe('registered');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('still synthesizes when status is offline', () => {
+    writeConfig({ terminals: { 'api': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    writeStatus('api', 'offline');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm, undefined, STATUS_DIR);
+
+    expect(tracker.getTiles().find((t) => t.name === 'api')?.status).toBe('registered');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('still synthesizes when status file is stale (>60s old)', () => {
+    writeConfig({ terminals: { 'api': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    writeStatus('api', 'working', 120_000);
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm, undefined, STATUS_DIR);
+
+    expect(tracker.getTiles().find((t) => t.name === 'api')?.status).toBe('registered');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('gracefully handles malformed status JSON (fall through to synthesis)', () => {
+    writeConfig({ terminals: { 'api': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    fs.writeFileSync(path.join(STATUS_DIR, 'api.json'), '{ not valid json');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm, undefined, STATUS_DIR);
+
+    expect(tracker.getTiles().find((t) => t.name === 'api')?.status).toBe('registered');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+});
+
+describe('TerminalTracker.addTerminal — clone suffix (#17)', () => {
+  it('does NOT write a config entry for cloned terminals', () => {
+    writeConfig({ terminals: { 'api': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    addMockTerminal('api');
+    addMockTerminal('api (copy)');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    // Clone exists as a tile in memory...
+    const tiles = tracker.getTiles();
+    expect(tiles.find((t) => t.name === 'api (copy)')).toBeDefined();
+    // ...but no config entry was created.
+    expect(cm.getTerminal('api (copy)')).toBeUndefined();
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('skips config write for double-cloned names too ("x (copy) (copy)")', () => {
+    writeConfig({ terminals: {} });
+    addMockTerminal('x (copy) (copy)');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(cm.getTerminal('x (copy) (copy)')).toBeUndefined();
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('still writes a config entry for a normal non-clone name', () => {
+    writeConfig({ terminals: {} });
+    addMockTerminal('mortgage-viz');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(cm.getTerminal('mortgage-viz')).toBeDefined();
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('does not flag a name that just contains "(copy)" mid-string', () => {
+    // Only the ` (copy)` suffix pattern is excluded; mid-string occurrences
+    // don't count (unlikely but possible user-chosen name).
+    writeConfig({ terminals: {} });
+    addMockTerminal('(copy) weirdproject');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(cm.getTerminal('(copy) weirdproject')).toBeDefined();
+
+    tracker.dispose();
+    cm.dispose();
+  });
+});
+
 describe('TerminalTracker.setPinned', () => {
   it('flips the tile flag and persists to config', () => {
     writeConfig({ terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });

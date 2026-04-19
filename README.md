@@ -31,6 +31,8 @@ A VS Code sidebar that shows you — at a glance — what every Claude Code term
 
 Prerequisites: **VS Code** ≥ 1.93, **Claude Code** CLI installed and working. No `jq`, no bash, no special tools.
 
+In a **Dev Container or Codespace**? Vanilla VS Code can't install this from the marketplace (it's on Open VSX) — see the [Dev Containers section](docs/install.md#dev-containers--codespaces) for a self-healing `postAttachCommand` snippet.
+
 Prefer the command line or want to see every step? See **[the full install guide](docs/install.md)** for CLI and manual setup.
 
 ## Core Features
@@ -40,7 +42,7 @@ Prefer the command line or want to see every step? See **[the full install guide
 - **Auto-start projects** — each terminal has its own startup command and working directory; opens on VS Code launch
 - **Context window %** — every tile shows how full the session's context is
 - **Two personality modes** — `chill` (quiet) or `passive-aggressive` (guilt-trips you with messages like "Patiently judging you")
-- **Audio alerts** — optional chime when Claude finishes, optional second sound for permission prompts; bring your own clips
+- **Audio alerts** — optional chime when Claude finishes (`turnDone`) and optional second sound for mid-job prompts (`midJobPrompt`). Ships with a gentle default chime + a soda-can pop alternative; drop your own clips in `~/.claude/sounds/` to override
 - **Setup wizard + walkthrough** — 5-step guided onboarding; VS Code's native walkthrough API for first-run
 
 <details>

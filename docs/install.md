@@ -20,6 +20,28 @@ The extension writes a hook script to `~/.claude/hooks/dashboard-status.js` and 
 
 You can also trigger install manually: `Cmd+Shift+P` → **Claudelike Bar: Install Hooks**.
 
+## Dev Containers / Codespaces
+
+Listing `aes87.claudelike-bar` in your `devcontainer.json` under `customizations.vscode.extensions` only works when VS Code's extension gallery is Open VSX (VSCodium, Cursor, and forks). **Vanilla VS Code defaults to the Microsoft Marketplace**, which doesn't have this extension, and the install silently fails — the sidebar just doesn't appear, and there's no error in the build log.
+
+Self-heal by dropping this into your container's `postAttachCommand` (or any script that runs on attach). Idempotent — re-running is a no-op when the extension is already installed, so the same line works across rebuilds:
+
+```bash
+if ! code --list-extensions 2>/dev/null | grep -q aes87.claudelike-bar; then
+  curl -sL https://github.com/aes87/claudelike-bar/releases/latest/download/claudelike-bar.vsix \
+    -o /tmp/clb.vsix \
+    && code --install-extension /tmp/clb.vsix
+fi
+```
+
+Or point directly at a pinned version instead of `latest`:
+
+```bash
+code --install-extension https://github.com/aes87/claudelike-bar/releases/download/v0.14.0/claudelike-bar-0.14.0.vsix
+```
+
+Everything else (hooks, config, sounds, statusline) lives in `~/.claude/` — persist that directory via a Docker volume and rebuilds don't touch your setup.
+
 ## Command line
 
 Clone the repo and run:

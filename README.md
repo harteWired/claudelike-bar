@@ -1,5 +1,6 @@
 # claudelike-bar
 
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/aes87.claudelike-bar?label=Marketplace&color=1e1e2e)](https://marketplace.visualstudio.com/items?itemName=aes87.claudelike-bar)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/aes87/claudelike-bar?label=Open%20VSX&color=1e1e2e)](https://open-vsx.org/extension/aes87/claudelike-bar)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -25,13 +26,19 @@ A VS Code sidebar that shows you — at a glance — what every Claude Code term
 
 ## Install
 
-1. Install from [Open VSX](https://open-vsx.org/extension/aes87/claudelike-bar) — or any VS Code-compatible marketplace.
-2. VS Code prompts: **"Claudelike Bar needs hooks to track terminal status. Set up your projects now?"** Click **Set Up Projects** to run the wizard, or **Install Hooks Only** for a minimal start.
-3. Tiles start updating on your next Claude turn.
+Pick whichever gallery your editor uses:
+
+- **[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=aes87.claudelike-bar)** — vanilla VS Code (`ext install aes87.claudelike-bar` or the Extensions sidebar).
+- **[Open VSX](https://open-vsx.org/extension/aes87/claudelike-bar)** — VSCodium, Cursor, and most Dev Containers / Codespaces setups.
+
+After install:
+
+1. VS Code prompts: **"Claudelike Bar needs hooks to track terminal status. Set up your projects now?"** Click **Set Up Projects** to run the wizard, or **Install Hooks Only** for a minimal start.
+2. Tiles start updating on your next Claude turn.
 
 Prerequisites: **VS Code** ≥ 1.93, **Claude Code** CLI installed and working. No `jq`, no bash, no special tools.
 
-In a **Dev Container or Codespace**? Vanilla VS Code can't install this from the marketplace (it's on Open VSX) — see the [Dev Containers section](docs/install.md#dev-containers--codespaces) for a self-healing `postAttachCommand` snippet.
+In a **Dev Container or Codespace**? See the [Dev Containers section](docs/install.md#dev-containers--codespaces) for a self-healing `postAttachCommand` snippet.
 
 Prefer the command line or want to see every step? See **[the full install guide](docs/install.md)** for CLI and manual setup.
 

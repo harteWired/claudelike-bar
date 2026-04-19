@@ -28,10 +28,6 @@
       --font-heading: 'Playfair Display', Georgia, serif;
       --font-body:    'Inter', system-ui, sans-serif;
       --font-mono:    'JetBrains Mono', monospace;
-      --font-weight-heading: 700;
-      --font-weight-body: 400;
-      --font-weight-medium: 500;
-      --font-weight-semibold: 600;
 
       --text-sm: 0.75rem;
       --text-base: 1rem;
@@ -41,7 +37,7 @@
       --text-4: 3.157rem;
       --text-5: 4.209rem;
       --text-6: 5.61rem;
-      --font-size-hero: clamp(2.5rem, 5vw + 1rem, var(--text-6));
+      --font-size-hero: clamp(2.25rem, 4.5vw + 0.5rem, var(--text-5));
       --line-height-body: 1.65;
       --line-height-heading: 1.1;
       --letter-spacing-overline: 0.12em;
@@ -65,12 +61,9 @@
       --duration-micro: 200ms;
       --duration-hover: 280ms;
       --duration-entrance: 700ms;
-      --duration-hero: 1200ms;
-      --stagger-delay: 70ms;
 
-      --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3);
       --shadow-md: 0 8px 24px oklch(0 0 0 / 0.4);
-      --shadow-lg: 0 16px 48px oklch(0 0 0 / 0.5);
+      --shadow-lg: 0 24px 60px oklch(0 0 0 / 0.55);
 
       --radius-sm: 0.25rem;
       --radius-md: 0.5rem;
@@ -78,7 +71,6 @@
       --border-subtle: 1px solid oklch(1 0 0 / 0.06);
 
       --z-bg-effect: -1;
-      --z-base: 1;
       --z-nav: 100;
 
       --bg-effect-opacity: 0.35;
@@ -95,7 +87,7 @@
 
     body {
       font-family: var(--font-body);
-      font-weight: var(--font-weight-body);
+      font-weight: 400;
       font-size: var(--text-base);
       line-height: var(--line-height-body);
       color: var(--color-fg-base);
@@ -126,7 +118,7 @@
     }
     .skip-link:focus { transform: translateY(0); }
 
-    /* -------- Grain, spotlight, blobs -------- */
+    /* -------- Ambient layers -------- */
     .grain {
       position: fixed; inset: 0; z-index: 9999;
       pointer-events: none; opacity: var(--bg-effect-opacity);
@@ -186,6 +178,9 @@
     .nav {
       position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-nav);
       padding: var(--space-lg) var(--grid-margin);
+      background-color: oklch(0.13 0.015 270 / 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       transition:
         background-color var(--duration-hover) var(--ease-standard),
         padding var(--duration-hover) var(--ease-standard),
@@ -193,7 +188,7 @@
     }
     .nav--scrolled {
       padding-block: var(--space-md);
-      background-color: oklch(0.13 0.015 270 / 0.85);
+      background-color: oklch(0.13 0.015 270 / 0.9);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-bottom: var(--border-subtle);
@@ -268,19 +263,20 @@
       outline: 2px solid var(--color-accent-primary); outline-offset: 2px;
     }
 
-    /* -------- Hero -------- */
+    /* -------- Hero — live demo leads the page -------- */
     .hero {
-      position: relative; display: grid; place-items: center;
-      min-height: 100svh; padding: var(--space-3xl) var(--grid-margin);
-      text-align: left; overflow: hidden;
+      position: relative; overflow: hidden;
+      padding: calc(var(--space-3xl) + 2rem) var(--grid-margin) var(--space-3xl);
+      min-height: 100svh; display: grid; place-items: center;
     }
     .hero__content {
       position: relative; z-index: 2;
       max-width: var(--grid-max-width); width: 100%;
-      display: grid; grid-template-columns: 1.3fr 1fr;
-      gap: var(--space-2xl); align-items: center;
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: clamp(2rem, 5vw, 5rem);
+      align-items: center;
     }
-    .hero__text { max-width: 42rem; }
+    .hero__text { max-width: 36rem; }
     .hero__overline {
       font-family: var(--font-mono); font-size: var(--text-sm);
       color: var(--color-accent-primary); text-transform: uppercase;
@@ -293,31 +289,32 @@
     .hero__headline {
       font-family: var(--font-heading); font-size: var(--font-size-hero);
       font-weight: 700; line-height: var(--line-height-heading);
-      color: var(--color-fg-base); margin-bottom: var(--space-xl);
+      color: var(--color-fg-base); margin-bottom: var(--space-lg);
     }
     .hero__headline em {
       font-style: italic; color: var(--color-accent-primary);
     }
     .hero__subhead {
       font-size: var(--text-1); color: var(--color-fg-muted);
-      max-width: 36rem; margin-bottom: var(--space-2xl); opacity: 0;
+      max-width: 34rem; margin-bottom: var(--space-xl); opacity: 0;
     }
     .hero__cta { display: flex; flex-wrap: wrap; gap: var(--space-md); opacity: 0; }
-    .hero__decoration {
-      position: relative; width: 100%; aspect-ratio: 1;
-      max-width: 440px; margin-inline: auto;
-      display: grid; place-items: center;
+    .hero__demo {
+      position: relative; opacity: 0;
+      display: flex; justify-content: center;
     }
-    .hero__rings {
-      position: absolute; inset: -20%; width: 140%; height: 140%;
-      opacity: 0.7; animation: rings-rotate 60s linear infinite;
+    .hero__demo .sidebar-frame {
+      width: 100%; max-width: 360px;
+      box-shadow: var(--shadow-lg);
+      transform-origin: center;
     }
-    @keyframes rings-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .hero__rabbit {
-      position: relative; width: 72%; height: auto;
-      opacity: 0;
-      filter: drop-shadow(0 0 30px oklch(0.72 0.12 165 / 0.35));
-      z-index: 1;
+    .hero__demo::before {
+      content: '';
+      position: absolute; inset: -10% -5%;
+      background: radial-gradient(ellipse at center,
+        oklch(0.78 0.14 55 / 0.08) 0%,
+        transparent 60%);
+      pointer-events: none; z-index: -1;
     }
     .hero__scroll-indicator {
       position: absolute; bottom: var(--space-xl); left: 50%;
@@ -341,11 +338,16 @@
       100% { transform: scaleY(1); opacity: 0; }
     }
     @media (max-width: 900px) {
-      .hero { text-align: center; }
-      .hero__content { grid-template-columns: 1fr; gap: var(--space-xl); }
-      .hero__text { max-width: 100%; margin-inline: auto; }
+      .hero { padding-top: calc(var(--space-3xl) + 1rem); }
+      .hero__content {
+        grid-template-columns: 1fr;
+        gap: var(--space-2xl);
+      }
+      .hero__text { text-align: center; max-width: 100%; margin-inline: auto; }
+      .hero__subhead { margin-inline: auto; }
       .hero__cta { justify-content: center; }
-      .hero__decoration { max-width: 260px; order: -1; opacity: 0.7; }
+      .hero__demo { order: 2; }
+      .hero__demo .sidebar-frame { max-width: 340px; }
     }
 
     /* -------- Sections (shared) -------- */
@@ -375,15 +377,12 @@
     }
 
     /* -------- VS Code preview surface -------- */
-    /* Scoped Catppuccin tokens so the preview reads as the actual product UI
-       without leaking into the rest of the page */
     .vscode-ui {
       --vs-font-family: 'Segoe UI', system-ui, sans-serif;
       --vs-fg: #cdd6f4;
       --vs-fg-muted: #6c7086;
       --vs-bg: #1e1e2e;
       --vs-bg-dim: #181825;
-      --vs-bg-dimmer: #11111b;
       --vs-border: #45475a;
       --vs-hover: #313244;
       --vs-active: #45475a;
@@ -398,41 +397,28 @@
       font-family: var(--vs-font-family);
     }
 
-    /* Preview layout */
-    .preview-shell {
-      background: var(--color-bg-elevated);
-      border: var(--border-subtle);
-      border-radius: var(--radius-lg);
-      padding: var(--space-xl);
-      box-shadow: var(--shadow-md);
-      overflow: hidden;
-    }
-    .preview-layout {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      gap: var(--space-2xl);
-      align-items: start;
-    }
-    @media (max-width: 820px) {
-      .preview-layout { grid-template-columns: 1fr; gap: var(--space-xl); }
-    }
-
-    /* Sidebar frame — VS Code-themed */
     .sidebar-frame {
-      width: 100%; max-width: 320px;
       background: var(--vs-bg-dim);
       border: 1px solid var(--vs-border);
       border-radius: 6px;
       overflow: hidden;
       font-size: 13px;
       color: var(--vs-fg);
+      font-family: var(--vs-font-family);
     }
     .sidebar-header {
       padding: 10px 14px; font-size: 11px; font-weight: 600;
       text-transform: uppercase; letter-spacing: 0.5px;
       color: var(--vs-fg-muted);
       border-bottom: 1px solid var(--vs-border);
+      display: flex; align-items: center; justify-content: space-between;
     }
+    .sidebar-header .rocket {
+      color: var(--vs-fg-muted); font-size: 13px;
+      opacity: 0.7; cursor: pointer;
+      transition: opacity var(--duration-micro);
+    }
+    .sidebar-header .rocket:hover { opacity: 1; }
     .sidebar-content { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 
     .tile {
@@ -467,8 +453,17 @@
     @keyframes dot-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.15; } }
     @keyframes dot-ignored { 0%,100% { opacity: 0.7; } 50% { opacity: 0.3; } }
 
-    /* Legend */
-    .legend { min-width: 0; }
+    /* -------- Legend (now in "closer look" section) -------- */
+    .closer-look {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-3xl);
+      align-items: start;
+    }
+    @media (max-width: 820px) {
+      .closer-look { grid-template-columns: 1fr; gap: var(--space-2xl); }
+    }
+
     .legend-section { margin-bottom: var(--space-xl); }
     .legend-section:last-child { margin-bottom: 0; }
     .legend-section h3 {
@@ -483,8 +478,16 @@
       color: var(--color-fg-muted);
     }
     .legend-item strong { color: var(--color-fg-base); font-weight: 500; margin-right: 0.25rem; }
+    .color-swatches {
+      display: flex; gap: var(--space-sm); flex-wrap: wrap;
+      align-items: center;
+    }
+    .color-swatches__label {
+      font-size: var(--text-sm); color: var(--color-fg-muted);
+      margin-right: var(--space-sm);
+    }
     .color-swatch {
-      width: 14px; height: 14px; border-radius: 3px;
+      width: 18px; height: 18px; border-radius: 4px;
       border: 1px solid rgba(255,255,255,0.1); flex-shrink: 0;
     }
     .legend-dot { width: 10px; height: 10px; min-width: 10px; border-radius: 50%; }
@@ -506,15 +509,14 @@
     .ctx-badge.ctx-crit { color: var(--vs-red); }
 
     /* -------- Context menu demo -------- */
-    .context-demo {
-      margin-top: var(--space-3xl);
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: var(--space-2xl);
-      align-items: start;
+    .ctx-demo { display: flex; flex-direction: column; gap: var(--space-lg); }
+    .ctx-demo__menu-wrap {
+      display: flex; justify-content: center;
+      padding: var(--space-lg);
+      background: var(--color-bg-elevated);
+      border: var(--border-subtle);
+      border-radius: var(--radius-md);
     }
-    @media (max-width: 820px) { .context-demo { grid-template-columns: 1fr; } }
-
     .ctx-menu {
       background: var(--vs-bg);
       border: 1px solid var(--vs-border);
@@ -535,109 +537,146 @@
     .ctx-label { padding: 4px 14px; color: var(--vs-fg-muted); font-size: 11px; opacity: 0.7; }
     .swatch-row { display: flex; gap: 6px; padding: 4px 14px 6px; }
     .swatch-row .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.15); }
-
-    .context-demo__text h3 {
+    .ctx-demo__text h3 {
       font-family: var(--font-heading); font-size: var(--text-2);
       font-weight: 700; color: var(--color-fg-base);
       margin-bottom: var(--space-md);
       display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap;
     }
-    .context-demo__text p {
+    .ctx-demo__text p {
       font-size: var(--text-base); color: var(--color-fg-muted);
       line-height: var(--line-height-body); margin-bottom: var(--space-md);
-      max-width: 36rem;
     }
-    .context-demo__text p:last-child { margin-bottom: 0; }
-    .context-demo__text strong { color: var(--color-fg-base); font-weight: 600; }
-    .context-demo__text em { color: var(--color-fg-base); font-style: normal; }
+    .ctx-demo__text p:last-child { margin-bottom: 0; }
+    .ctx-demo__text strong { color: var(--color-fg-base); font-weight: 600; }
+
     .badge {
       font-family: var(--font-mono); font-size: 0.625rem; font-weight: 400;
       background: transparent; color: var(--color-accent-secondary);
       padding: 2px 8px; border-radius: var(--radius-sm);
       border: 1px solid oklch(0.72 0.12 165 / 0.3);
       letter-spacing: 0.05em; text-transform: uppercase;
+      white-space: nowrap;
     }
 
-    /* -------- Feature grid -------- */
-    .features {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: var(--grid-gap);
+    /* -------- Changelog timeline -------- */
+    .changelog {
+      position: relative;
+      padding-left: var(--space-3xl);
     }
-    @media (max-width: 820px) { .features { grid-template-columns: 1fr; } }
-
-    .feature {
-      position: relative; display: flex; flex-direction: column;
-      padding: var(--space-xl);
-      background: var(--color-bg-surface);
-      border: var(--border-subtle); border-radius: var(--radius-lg);
-      transition:
-        transform var(--duration-hover) var(--ease-dramatic),
-        box-shadow var(--duration-hover) var(--ease-dramatic),
-        border-color var(--duration-hover) var(--ease-standard);
+    .changelog::before {
+      content: ''; position: absolute; left: 18px; top: 6px; bottom: 6px;
+      width: 1px; background: var(--color-fg-subtle);
     }
-    @media (hover: hover) {
-      .feature:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-md);
-        border-color: oklch(1 0 0 / 0.12);
-      }
+    .changelog__entry {
+      position: relative; padding-bottom: var(--space-2xl);
     }
-    .feature h3 {
-      font-family: var(--font-heading); font-size: var(--text-1);
+    .changelog__entry:last-child { padding-bottom: 0; }
+    .changelog__marker {
+      position: absolute;
+      left: calc(-1 * var(--space-3xl) + 4px);
+      top: 2px;
+      width: 28px; height: 28px;
+      display: grid; place-items: center;
+      border-radius: 50%;
+      background: var(--color-bg-base);
+      border: 1px solid var(--color-accent-primary);
+    }
+    .changelog__marker span {
+      font-family: var(--font-mono); font-size: 0.625rem;
+      color: var(--color-accent-primary);
+      font-weight: 600;
+    }
+    .changelog__entry h3 {
+      font-family: var(--font-heading); font-size: var(--text-2);
       font-weight: 700; color: var(--color-fg-base);
-      margin-bottom: var(--space-md);
-      display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap;
+      margin-bottom: var(--space-sm);
       line-height: 1.2;
     }
-    .feature p {
+    .changelog__entry h3 .version-tag {
+      font-family: var(--font-mono); font-size: var(--text-sm);
+      font-weight: 400; color: var(--color-fg-subtle);
+      margin-left: var(--space-md);
+      text-transform: none; letter-spacing: 0;
+    }
+    .changelog__entry > p {
+      font-size: var(--text-base); color: var(--color-fg-muted);
+      line-height: var(--line-height-body);
+      margin-bottom: var(--space-md);
+      max-width: 52rem;
+    }
+    .changelog__entry ul {
+      list-style: none; padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: var(--space-sm);
+      max-width: 52rem;
+    }
+    .changelog__entry ul li {
+      position: relative; padding-left: var(--space-lg);
       font-size: var(--text-base); color: var(--color-fg-muted);
       line-height: var(--line-height-body);
     }
-    .feature p + p { margin-top: var(--space-md); }
-    .feature code {
+    .changelog__entry ul li::before {
+      content: '';
+      position: absolute; left: 0; top: 0.75em;
+      width: 6px; height: 1px;
+      background: var(--color-accent-secondary);
+    }
+    .changelog__entry ul li strong { color: var(--color-fg-base); font-weight: 600; }
+    .changelog__entry code {
       font-family: var(--font-mono); font-size: 0.875em;
       padding: 1px 6px; border-radius: var(--radius-sm);
       background: oklch(0.78 0.14 55 / 0.09);
       color: var(--color-accent-primary);
     }
-    .feature strong { color: var(--color-fg-base); font-weight: 600; }
 
-    .mode-toggle {
-      display: flex; gap: var(--space-sm); margin-top: var(--space-md);
+    .always-on {
+      margin-top: var(--space-3xl);
+      padding-top: var(--space-2xl);
+      border-top: var(--border-subtle);
+      max-width: 52rem; margin-left: auto; margin-right: auto;
+    }
+    .always-on__overline {
       font-family: var(--font-mono); font-size: var(--text-sm);
+      color: var(--color-accent-secondary); text-transform: uppercase;
+      letter-spacing: var(--letter-spacing-overline);
+      margin-bottom: var(--space-md);
     }
-    .mode-toggle .pill {
-      padding: 4px 12px; border-radius: 999px;
-      border: 1px solid oklch(1 0 0 / 0.1);
-      color: var(--color-fg-subtle);
+    .always-on h3 {
+      font-family: var(--font-heading); font-size: var(--text-2);
+      font-weight: 700; color: var(--color-fg-base);
+      margin-bottom: var(--space-lg);
     }
-    .mode-toggle .pill.on {
-      background: var(--color-accent-primary); color: var(--color-bg-base);
-      border-color: var(--color-accent-primary); font-weight: 600;
+    .always-on ul {
+      list-style: none; padding: 0; margin: 0;
+      display: flex; flex-direction: column; gap: var(--space-sm);
+    }
+    .always-on ul li {
+      position: relative; padding-left: var(--space-lg);
+      font-size: var(--text-base); color: var(--color-fg-muted);
+      line-height: var(--line-height-body);
+    }
+    .always-on ul li::before {
+      content: '';
+      position: absolute; left: 0; top: 0.75em;
+      width: 6px; height: 1px;
+      background: var(--color-accent-primary);
+    }
+    .always-on ul li strong { color: var(--color-fg-base); font-weight: 600; }
+    .always-on code {
+      font-family: var(--font-mono); font-size: 0.875em;
+      padding: 1px 6px; border-radius: var(--radius-sm);
+      background: oklch(0.78 0.14 55 / 0.09);
+      color: var(--color-accent-primary);
     }
 
-    .drag-mock {
-      display: flex; flex-direction: column; gap: 4px;
-      margin-top: var(--space-md);
+    @media (max-width: 640px) {
+      .changelog { padding-left: var(--space-2xl); }
+      .changelog__marker {
+        left: calc(-1 * var(--space-2xl) + 4px);
+        width: 24px; height: 24px;
+      }
+      .changelog::before { left: 15px; }
     }
-    .drag-mock .mini-tile {
-      display: flex; align-items: center; gap: 8px;
-      padding: 6px 10px;
-      background: var(--vs-bg);
-      border: 1px solid var(--vs-border);
-      border-left: 4px solid var(--tile-color);
-      border-radius: 3px;
-      font-size: 12px; color: var(--vs-fg);
-      font-family: var(--vs-font-family);
-      position: relative;
-    }
-    .drag-mock .mini-tile.dragging { opacity: 0.4; }
-    .drag-mock .mini-tile.drop-target::before {
-      content: ''; position: absolute; left: 0; right: 0; top: -4px;
-      height: 2px; background: var(--vs-focus);
-    }
-    .drag-mock .grip { color: var(--vs-fg-muted); font-size: 10px; }
 
     /* -------- Chat section -------- */
     .chat {
@@ -745,13 +784,12 @@
         scroll-behavior: auto !important;
       }
       .hero__overline, .hero__subhead, .hero__cta,
-      .hero__scroll-indicator, .hero__rabbit { opacity: 1; }
+      .hero__scroll-indicator, .hero__demo { opacity: 1; }
       .reveal { opacity: 1; transform: none; }
       .cursor-spotlight { display: none; }
       .morphing-blobs__blob--0,
       .morphing-blobs__blob--1,
-      .morphing-blobs__blob--2,
-      .hero__rings { animation: none !important; }
+      .morphing-blobs__blob--2 { animation: none !important; }
       .dot.working, .dot.waiting, .dot.ignored,
       .legend-dot.working, .legend-dot.waiting, .legend-dot.ignored {
         animation: none !important;
@@ -781,8 +819,8 @@
         aes87
       </a>
       <ul class="nav__links">
-        <li><a href="#preview" class="nav__link">Preview</a></li>
-        <li><a href="#features" class="nav__link">Features</a></li>
+        <li><a href="#closer-look" class="nav__link">Details</a></li>
+        <li><a href="#changelog" class="nav__link">Changelog</a></li>
         <li><a href="#configure" class="nav__link">Configure</a></li>
         <li><a href="#install" class="nav__link">Install</a></li>
       </ul>
@@ -791,31 +829,79 @@
 
   <main id="main">
 
-    <!-- ====== Hero ====== -->
+    <!-- ====== Hero — live demo leads the page ====== -->
     <section class="hero" aria-label="Hero">
       <div class="hero__content">
         <div class="hero__text">
           <p class="hero__overline">VS Code Extension <span class="version">v0.13.5</span></p>
           <h1 class="hero__headline" data-split="words">Live status tiles for every <em>Claude Code</em> terminal.</h1>
-          <p class="hero__subhead">A sidebar that shows what every Claude is doing at a glance — animated status dots, color-coded borders, drag-to-reorder, context-window tracking, and a passive-aggressive mode that guilt-trips you when you ignore it.</p>
+          <p class="hero__subhead">A sidebar that shows what every Claude is doing at a glance — animated dots, color-coded borders, drag-to-reorder, context-window tracking, and a passive-aggressive mode that guilt-trips you when you ignore it.</p>
           <div class="hero__cta">
             <a href="https://marketplace.visualstudio.com/items?itemName=aes87.claudelike-bar" class="btn btn--primary" target="_blank" rel="noopener">Install — Marketplace</a>
             <a href="https://github.com/aes87/claudelike-bar" class="btn btn--ghost" target="_blank" rel="noopener">GitHub</a>
           </div>
         </div>
 
-        <div class="hero__decoration" aria-hidden="true">
-          <svg class="hero__rings" viewBox="0 0 600 600" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="300" cy="300" r="34.77" fill="none" stroke="oklch(0.72 0.12 165)" stroke-width="1.5" opacity="0.12"/>
-            <circle cx="300" cy="300" r="66.98" fill="none" stroke="oklch(0.78 0.14 55)" stroke-width="1.42" opacity="0.11"/>
-            <circle cx="300" cy="300" r="104.82" fill="none" stroke="oklch(0.72 0.12 165)" stroke-width="1.35" opacity="0.11"/>
-            <circle cx="300" cy="300" r="136.72" fill="none" stroke="oklch(0.78 0.14 55)" stroke-width="1.27" opacity="0.1"/>
-            <circle cx="300" cy="300" r="165.46" fill="none" stroke="oklch(0.72 0.12 165)" stroke-width="1.2" opacity="0.09"/>
-            <circle cx="300" cy="300" r="202.77" fill="none" stroke="oklch(0.78 0.14 55)" stroke-width="1.13" opacity="0.08"/>
-            <circle cx="300" cy="300" r="233.95" fill="none" stroke="oklch(0.72 0.12 165)" stroke-width="1.05" opacity="0.08"/>
-            <circle cx="300" cy="300" r="271.26" fill="none" stroke="oklch(0.78 0.14 55)" stroke-width="0.97" opacity="0.07"/>
-          </svg>
-          <img class="hero__rabbit" src="assets/whiterabbiticon2.png" alt="" width="400" height="400" loading="eager">
+        <div class="hero__demo vscode-ui" aria-label="Live sidebar preview">
+          <div class="sidebar-frame" role="img" aria-label="Sidebar with six terminal tiles in varied statuses">
+            <div class="sidebar-header">
+              <span>Terminals</span>
+              <span class="rocket" aria-hidden="true">🚀</span>
+            </div>
+            <div class="sidebar-content">
+              <div class="tile status-ignored" style="--tile-color: var(--vs-cyan)">
+                <div class="tile-header">
+                  <span class="dot ignored"></span>
+                  <span class="tile-name">world-domination</span>
+                  <span class="tile-time">4m</span>
+                  <span class="tile-ctx ctx-warn">ctx 63%</span>
+                </div>
+                <div class="tile-status status-ignored">Patiently judging you</div>
+              </div>
+              <div class="tile" style="--tile-color: var(--vs-yellow)">
+                <div class="tile-header">
+                  <span class="dot waiting"></span>
+                  <span class="tile-name">yeet-to-prod</span>
+                  <span class="tile-time">12s</span>
+                  <span class="tile-ctx ctx-ok">ctx 22%</span>
+                </div>
+                <div class="tile-status">Waiting for input</div>
+              </div>
+              <div class="tile active drop-after" style="--tile-color: var(--vs-magenta)">
+                <div class="tile-header">
+                  <span class="dot working"></span>
+                  <span class="tile-name">print-go-brrr</span>
+                  <span class="tile-time">now</span>
+                  <span class="tile-ctx ctx-ok">ctx 8%</span>
+                </div>
+                <div class="tile-status">Working</div>
+              </div>
+              <div class="tile" style="--tile-color: var(--vs-red)">
+                <div class="tile-header">
+                  <span class="dot done"></span>
+                  <span class="tile-name">spore-drive</span>
+                  <span class="tile-time">28s</span>
+                  <span class="tile-ctx ctx-crit">ctx 84%</span>
+                </div>
+                <div class="tile-status">Done</div>
+              </div>
+              <div class="tile" style="--tile-color: var(--vs-blue)">
+                <div class="tile-header">
+                  <span class="dot idle"></span>
+                  <span class="tile-name">brain-dump</span>
+                  <span class="tile-ctx ctx-ok">ctx 15%</span>
+                </div>
+                <div class="tile-status">Idle</div>
+              </div>
+              <div class="tile" style="--tile-color: var(--vs-green)">
+                <div class="tile-header">
+                  <span class="dot idle"></span>
+                  <span class="tile-name">sourdough-ops</span>
+                </div>
+                <div class="tile-status">Idle</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -825,280 +911,160 @@
       </div>
     </section>
 
-    <!-- ====== Preview ====== -->
-    <section class="section" id="preview" aria-labelledby="preview-heading">
+    <!-- ====== Closer look — legend + context menu ====== -->
+    <section class="section section--surface" id="closer-look" aria-labelledby="closer-heading">
       <div class="section__container">
         <header class="section__header">
-          <p class="section__overline">The Bar</p>
-          <h2 class="section__heading" id="preview-heading">Every Claude, one glance.</h2>
-          <p class="section__description">One tile per terminal. Color-coded left borders, status dots that mean exactly what they look like they mean, context-window percentage when Claude's burning hot.</p>
+          <p class="section__overline">What the tile tells you</p>
+          <h2 class="section__heading" id="closer-heading">Four dots, seven colors, one number.</h2>
+          <p class="section__description">Every signal is small on purpose. The sidebar should read at a glance, not demand a tutorial.</p>
         </header>
 
-        <div class="preview-shell vscode-ui">
-          <div class="preview-layout">
+        <div class="closer-look vscode-ui">
 
-            <div class="sidebar-frame" role="img" aria-label="Sidebar preview with six terminal tiles showing varied statuses">
-              <div class="sidebar-header">Terminals</div>
-              <div class="sidebar-content">
-                <div class="tile status-ignored" style="--tile-color: var(--vs-cyan)">
-                  <div class="tile-header">
-                    <span class="dot ignored"></span>
-                    <span class="tile-name">world-domination</span>
-                    <span class="tile-time">4m</span>
-                    <span class="tile-ctx ctx-warn">ctx 63%</span>
-                  </div>
-                  <div class="tile-status status-ignored">Patiently judging you</div>
-                </div>
-                <div class="tile" style="--tile-color: var(--vs-yellow)">
-                  <div class="tile-header">
-                    <span class="dot waiting"></span>
-                    <span class="tile-name">yeet-to-prod</span>
-                    <span class="tile-time">12s</span>
-                    <span class="tile-ctx ctx-ok">ctx 22%</span>
-                  </div>
-                  <div class="tile-status">Waiting for input</div>
-                </div>
-                <div class="tile active drop-after" style="--tile-color: var(--vs-magenta)">
-                  <div class="tile-header">
-                    <span class="dot working"></span>
-                    <span class="tile-name">print-go-brrr</span>
-                    <span class="tile-time">now</span>
-                    <span class="tile-ctx ctx-ok">ctx 8%</span>
-                  </div>
-                  <div class="tile-status">Working</div>
-                </div>
-                <div class="tile" style="--tile-color: var(--vs-red)">
-                  <div class="tile-header">
-                    <span class="dot done"></span>
-                    <span class="tile-name">spore-drive</span>
-                    <span class="tile-time">28s</span>
-                    <span class="tile-ctx ctx-crit">ctx 84%</span>
-                  </div>
-                  <div class="tile-status">Done</div>
-                </div>
-                <div class="tile" style="--tile-color: var(--vs-blue)">
-                  <div class="tile-header">
-                    <span class="dot idle"></span>
-                    <span class="tile-name">brain-dump</span>
-                    <span class="tile-ctx ctx-ok">ctx 15%</span>
-                  </div>
-                  <div class="tile-status">Idle</div>
-                </div>
-                <div class="tile" style="--tile-color: var(--vs-green)">
-                  <div class="tile-header">
-                    <span class="dot idle"></span>
-                    <span class="tile-name">sourdough-ops</span>
-                  </div>
-                  <div class="tile-status">Idle</div>
-                </div>
-              </div>
+          <div>
+            <div class="legend-section">
+              <h3>Status dots</h3>
+              <div class="legend-item"><span class="legend-dot waiting"></span> <span><strong>Waiting</strong> — amber blink, needs your input.</span></div>
+              <div class="legend-item"><span class="legend-dot ignored"></span> <span><strong>Ignored</strong> — red slow pulse + dashed border. Was waiting, you looked away.</span></div>
+              <div class="legend-item"><span class="legend-dot working"></span> <span><strong>Working</strong> — green pulse.</span></div>
+              <div class="legend-item"><span class="legend-dot done"></span> <span><strong>Done</strong> — cyan static. Parked at the bottom.</span></div>
+              <div class="legend-item"><span class="legend-dot idle"></span> <span><strong>Idle</strong> — no dot.</span></div>
             </div>
 
-            <div class="legend">
-              <div class="legend-section">
-                <h3>Status indicators</h3>
-                <div class="legend-item"><span class="legend-dot waiting"></span> <span><strong>Waiting</strong> — amber blink, needs your input.</span></div>
-                <div class="legend-item"><span class="legend-dot ignored"></span> <span><strong>Ignored</strong> — red slow pulse, dashed border. Was waiting, you looked elsewhere.</span></div>
-                <div class="legend-item"><span class="legend-dot working"></span> <span><strong>Working</strong> — green pulse.</span></div>
-                <div class="legend-item"><span class="legend-dot done"></span> <span><strong>Done</strong> — cyan static. Parked at the bottom.</span></div>
-                <div class="legend-item"><span class="legend-dot idle"></span> <span><strong>Idle</strong> — no dot.</span></div>
-              </div>
-
-              <div class="legend-section">
-                <h3>Theme colors (left border)</h3>
-                <div class="legend-item"><span class="color-swatch" style="background:var(--vs-cyan)"></span> Cyan</div>
-                <div class="legend-item"><span class="color-swatch" style="background:var(--vs-green)"></span> Green</div>
-                <div class="legend-item"><span class="color-swatch" style="background:var(--vs-blue)"></span> Blue</div>
-                <div class="legend-item"><span class="color-swatch" style="background:var(--vs-magenta)"></span> Magenta</div>
-                <div class="legend-item"><span class="color-swatch" style="background:var(--vs-yellow)"></span> Yellow</div>
-                <div class="legend-item"><span class="color-swatch" style="background:var(--vs-red)"></span> Red</div>
-                <div class="legend-item"><span class="color-swatch" style="background:var(--vs-white)"></span> White (default)</div>
-              </div>
-
-              <div class="legend-section">
-                <h3>Context window badge</h3>
-                <div class="legend-item"><span class="ctx-badge ctx-ok">ctx 22%</span> <span>Blue — under 60%.</span></div>
-                <div class="legend-item"><span class="ctx-badge ctx-warn">ctx 63%</span> <span>Amber — 60–79%.</span></div>
-                <div class="legend-item"><span class="ctx-badge ctx-crit">ctx 84%</span> <span>Red — 80% and up.</span></div>
-              </div>
+            <div class="legend-section">
+              <h3>Context badge</h3>
+              <div class="legend-item"><span class="ctx-badge ctx-ok">ctx 22%</span> <span><strong>Blue</strong> — under 60%.</span></div>
+              <div class="legend-item"><span class="ctx-badge ctx-warn">ctx 63%</span> <span><strong>Amber</strong> — 60&ndash;79%, start thinking about compact.</span></div>
+              <div class="legend-item"><span class="ctx-badge ctx-crit">ctx 84%</span> <span><strong>Red</strong> — 80%+, compact or bail.</span></div>
             </div>
 
+            <div class="legend-section">
+              <h3>Theme (left border)</h3>
+              <div class="color-swatches">
+                <span class="color-swatch" style="background:var(--vs-cyan)" title="Cyan"></span>
+                <span class="color-swatch" style="background:var(--vs-green)" title="Green"></span>
+                <span class="color-swatch" style="background:var(--vs-blue)" title="Blue"></span>
+                <span class="color-swatch" style="background:var(--vs-magenta)" title="Magenta"></span>
+                <span class="color-swatch" style="background:var(--vs-yellow)" title="Yellow"></span>
+                <span class="color-swatch" style="background:var(--vs-red)" title="Red"></span>
+                <span class="color-swatch" style="background:var(--vs-white)" title="White"></span>
+                <span class="color-swatches__label">+ any hex, rgb, hsl, or CSS var</span>
+              </div>
+            </div>
           </div>
 
-          <div class="context-demo">
-            <div class="ctx-menu" aria-hidden="true">
-              <div class="ctx-item highlighted"><span class="icon">✓</span> Mark as done</div>
-              <div class="ctx-sep"></div>
-              <div class="ctx-item"><span class="icon">❐</span> Clone terminal</div>
-              <div class="ctx-sep"></div>
-              <div class="ctx-label">🎨 Set color</div>
-              <div class="swatch-row">
-                <div class="swatch" style="background: var(--vs-cyan)"></div>
-                <div class="swatch" style="background: var(--vs-green)"></div>
-                <div class="swatch" style="background: var(--vs-blue)"></div>
-                <div class="swatch" style="background: var(--vs-magenta)"></div>
-                <div class="swatch" style="background: var(--vs-yellow)"></div>
-                <div class="swatch" style="background: var(--vs-white)"></div>
-                <div class="swatch" style="background: var(--vs-red)"></div>
-              </div>
-              <div class="ctx-sep"></div>
-              <div class="ctx-item destructive"><span class="icon">✕</span> Kill terminal</div>
-            </div>
-
-            <div class="context-demo__text">
+          <div class="ctx-demo">
+            <div class="ctx-demo__text">
               <h3>Right-click any tile <span class="badge">New</span></h3>
-              <p><strong>Mark as done</strong> parks a session you're not actively working with. The tile sinks to the bottom of auto-sort, its dot goes quiet, and — critically — background Stop / Notification / PreToolUse events from that Claude won't re-surface it or trigger passive-aggressive judgement. It stays parked until <em>you</em> submit a new prompt in that terminal; the next UserPromptSubmit is the only thing that un-parks it.</p>
-              <p><strong>Clone terminal</strong> spawns a fresh copy of the same profile (cwd, shell, args). <strong>Set color</strong> picks a per-terminal theme override — click a swatch, no file editing. <strong>Kill terminal</strong> disposes it entirely.</p>
+              <p><strong>Mark as done</strong> parks a session. It sinks to the bottom of auto-sort, the dot goes quiet, and background events won't re-surface it until <em>you</em> submit the next prompt.</p>
+              <p><strong>Clone</strong>, <strong>set color</strong>, <strong>kill</strong> — all one click from the menu, no file editing.</p>
+            </div>
+            <div class="ctx-demo__menu-wrap">
+              <div class="ctx-menu" aria-hidden="true">
+                <div class="ctx-item highlighted"><span class="icon">✓</span> Mark as done</div>
+                <div class="ctx-sep"></div>
+                <div class="ctx-item"><span class="icon">❐</span> Clone terminal</div>
+                <div class="ctx-sep"></div>
+                <div class="ctx-label">🎨 Set color</div>
+                <div class="swatch-row">
+                  <div class="swatch" style="background: var(--vs-cyan)"></div>
+                  <div class="swatch" style="background: var(--vs-green)"></div>
+                  <div class="swatch" style="background: var(--vs-blue)"></div>
+                  <div class="swatch" style="background: var(--vs-magenta)"></div>
+                  <div class="swatch" style="background: var(--vs-yellow)"></div>
+                  <div class="swatch" style="background: var(--vs-white)"></div>
+                  <div class="swatch" style="background: var(--vs-red)"></div>
+                </div>
+                <div class="ctx-sep"></div>
+                <div class="ctx-item destructive"><span class="icon">✕</span> Kill terminal</div>
+              </div>
             </div>
           </div>
+
         </div>
       </div>
     </section>
 
-    <!-- ====== Features ====== -->
-    <section class="section section--surface" id="features" aria-labelledby="features-heading">
+    <!-- ====== Changelog — features over time ====== -->
+    <section class="section" id="changelog" aria-labelledby="changelog-heading">
       <div class="section__container">
         <header class="section__header">
-          <p class="section__overline">What It Does</p>
-          <h2 class="section__heading" id="features-heading">Twenty small comforts.</h2>
-          <p class="section__description">Everything you'd tune a sidebar for, and a handful you'd only miss once they're gone.</p>
+          <p class="section__overline">Features over time</p>
+          <h2 class="section__heading" id="changelog-heading">How it got here.</h2>
+          <p class="section__description">Five minor versions in roughly five months, newest first.</p>
         </header>
 
-        <div class="features">
+        <ol class="changelog">
 
-          <div class="feature">
-            <h3>Offline tiles for every registered project <span class="badge">v0.13.4</span></h3>
-            <p>The bar used to show only currently-running terminals — registered projects you hadn't opened yet were invisible outside the JSONC config. Now every config entry renders as a dim, dashed, click-to-launch tile in its own zone at the bottom. Glance → click → launch → tile becomes live. Per-entry <code>hidden: true</code> opt-out; <code>showRegisteredProjects: false</code> at the top level disables the zone entirely.</p>
-          </div>
+          <li class="changelog__entry">
+            <div class="changelog__marker"><span>0.13</span></div>
+            <h3>Remote hosts, pinned tiles, launch on demand <span class="version-tag">Jan–Apr 2026</span></h3>
+            <p>The biggest version by feature volume. The bar now works the way it should across every host VS Code can reach, with tile zones for stability and a rocket for on-demand launches.</p>
+            <ul>
+              <li><strong>Remote everywhere</strong> — <code>extensionKind: ["workspace", "ui"]</code> so WSL2, SSH, Dev Containers, and Codespaces all register hooks to the right <code>~/.claude/</code>.</li>
+              <li><strong>Launch on demand</strong> — rocket icon, palette command, and tile right-click menu for QuickPick-launching any registered project. Pairs with <em>register without opening</em>.</li>
+              <li><strong>Pinned &amp; offline tiles</strong> — right-click → pin locks a tile to a stable bottom zone; registered-but-not-open projects show as dim click-to-launch tiles.</li>
+              <li><strong>Polish</strong> — OS color picker from the swatch row; one-click "switch to auto sort"; <code>fs.existsSync</code> pre-flight so a stale auto-start path warns once instead of modal-stacking.</li>
+            </ul>
+          </li>
 
-          <div class="feature">
-            <h3>Pinned tiles <span class="badge">v0.13.4</span></h3>
-            <p>Right-click a tile → <strong>Pin tile</strong> to fix it in a stable bottom zone, regardless of <code>sortMode</code>. Useful for monitoring/infra terminals you want at known coordinates while urgent project tiles still float to the top by status. The pinned zone is sorted by drag <code>order</code>, so within the zone you control the layout.</p>
-          </div>
+          <li class="changelog__entry">
+            <div class="changelog__marker"><span>0.12</span></div>
+            <h3>Audio alerts <span class="version-tag">Dec 2025</span></h3>
+            <p>Optional chime when Claude is waiting. Two slots — end-of-turn (<code>Stop</code>) and mid-job permission prompts (<code>Notification</code>) — so you can tell <em>done</em> apart from <em>blocked on approval</em> by ear. Off by default; BYO sound files to <code>~/.claude/sounds/</code>, right-click to mute per-tile.</p>
+          </li>
 
-          <div class="feature">
-            <h3>WSL2 / SSH / Dev Containers / Codespaces <span class="badge">v0.13.3</span></h3>
-            <p>The extension now declares <code>extensionKind: ["workspace", "ui"]</code> — VS Code runs the Node.js side on the same host as Claude Code, so hooks register to the right <code>~/.claude/settings.json</code>, status files land in the same <code>os.tmpdir()</code> the extension watches, and the config is one file instead of two ships passing in the night. Local-only setups fall through to <code>"ui"</code> and behave as before.</p>
-          </div>
+          <li class="changelog__entry">
+            <div class="changelog__marker"><span>0.11</span></div>
+            <h3>First-run experience <span class="version-tag">Nov 2025</span></h3>
+            <ul>
+              <li><strong>Setup wizard</strong> — 5-step QuickPick: pick folders, confirm names, assign colors, choose startup command, review.</li>
+              <li><strong>One-click add</strong> — sidebar <code>+</code> button → folder picker → terminal opens with Claude running and a tile in the bar. No config editing, no reload.</li>
+              <li><strong>Walkthrough</strong> — VS Code's native walkthrough API guides new users through setup.</li>
+              <li><strong>Hook path-lookup index</strong> — manually-opened terminals resolve via <code>~/.claude/claudelike-bar-paths.json</code>, atomic writes, trailing-slash normalized.</li>
+            </ul>
+          </li>
 
-          <div class="feature">
-            <h3>Audio alerts <span class="badge">v0.12</span></h3>
-            <p>Optional chime when Claude is waiting on you. Two slots — one for end-of-turn (<code>Stop</code>), one optional for mid-job permission prompts (<code>Notification</code>) — so you can tell "done" apart from "blocked on approval" by ear. Off by default; bring your own MP3/WAV/OGG, drop into <code>~/.claude/sounds/</code>, point the config at it. Right-click any tile to mute/unmute.</p>
-          </div>
+          <li class="changelog__entry">
+            <div class="changelog__marker"><span>0.10</span></div>
+            <h3>Global config &amp; path-based identity <span class="version-tag">Oct 2025</span></h3>
+            <p>Config moved from the workspace root to <code>~/.claude/claudelike-bar.jsonc</code> — one file across every VS Code window, next to your hooks and settings. Workspace-local configs auto-migrate on first load. Projects are keyed by absolute <code>path</code>, not basename, so two projects named <code>api</code> in different trees get distinct slugs.</p>
+          </li>
 
-          <div class="feature">
-            <h3>Launch any registered project <span class="badge">v0.13</span></h3>
-            <p>Set up a big config of registered projects with <code>autoStart: false</code> on the ones you don't want auto-launching. Then open them on demand: <strong>rocket icon</strong> in the sidebar header, or the <strong>Launch Registered Project</strong> palette command, or <em>Launch another project…</em> in any tile's right-click menu. QuickPick of every config entry not currently open. Same launch path as auto-start, no drift.</p>
-          </div>
+          <li class="changelog__entry">
+            <div class="changelog__marker"><span>0.9</span></div>
+            <h3>Cross-platform baseline <span class="version-tag">Sep 2025</span></h3>
+            <ul>
+              <li><strong>Windows / PowerShell / git-bash</strong> — auto-start via <code>createTerminal({env})</code>, no <code>export</code> noise, per-terminal <code>shellPath</code> override.</li>
+              <li><strong>Standalone statusline</strong> — independent script for context %, opt-in install with a diff preview, backup to <code>~/.claude/.claudelike-bar-statusline-backup.json</code>, restore from palette or chat.</li>
+            </ul>
+          </li>
 
-          <div class="feature">
-            <h3>Register without opening <span class="badge">v0.13</span></h3>
-            <p>Register Project flow ends with a <em>"Open terminal now / Register only"</em> choice. Pick "Register only" to add the entry with <code>autoStart: false</code> and launch it whenever via the rocket icon. Build out a 15-project registry without spawning 15 terminals.</p>
-          </div>
+        </ol>
 
-          <div class="feature">
-            <h3>Custom color picker <span class="badge">v0.13.2</span></h3>
-            <p>Right-click a tile → swatch row gains a rainbow <code>&lt;input type="color"&gt;</code> at the end. Click → OS color picker → any hex value flows through the same setColor handler. Pairs with the existing CSS-color support: <code>#hex</code>, <code>rgb()</code>, <code>hsl()</code>, <code>var(--anything)</code>.</p>
-          </div>
-
-          <div class="feature">
-            <h3>"Switch to auto sort" <span class="badge">v0.13.1</span></h3>
-            <p>Once you've dragged tiles around, <code>sortMode</code> flips to <code>"manual"</code> and stays there. Right-click any tile when in manual mode for a one-click <strong>Switch to auto sort</strong> entry — flips it back without opening the config. The entry hides itself when you're already in auto.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Auto-start cwd pre-flight <span class="badge">v0.13.1</span></h3>
-            <p>If you've moved/renamed/deleted a project dir, the bar used to surface VS Code's modal <em>"Starting directory does not exist"</em> error per stale entry. Now: <code>fs.existsSync</code> check before <code>createTerminal</code>, missing entries skipped, one warning toast at the end with an <strong>Open Config</strong> action. No modal pile-up.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Drag &amp; drop to reorder</h3>
-            <p>Grab any tile, drop it where you want. A blue rail shows the insertion point. The order is saved to <code>.claudelike-bar.jsonc</code> and survives window reloads.</p>
-            <div class="drag-mock" aria-hidden="true">
-              <div class="mini-tile" style="--tile-color: var(--vs-yellow)">
-                <span class="grip">⋮⋮</span>
-                <span class="dot waiting"></span>
-                yeet-to-prod
-              </div>
-              <div class="mini-tile drop-target" style="--tile-color: var(--vs-cyan)">
-                <span class="grip">⋮⋮</span>
-                <span class="dot ignored"></span>
-                world-domination
-              </div>
-              <div class="mini-tile dragging" style="--tile-color: var(--vs-magenta)">
-                <span class="grip">⋮⋮</span>
-                <span class="dot working"></span>
-                print-go-brrr
-              </div>
-            </div>
-          </div>
-
-          <div class="feature">
-            <h3>Sort modes</h3>
-            <p>Explicit <code>sortMode</code> switch. <em>Auto</em> floats "needs input" to the top. <em>Manual</em> respects your drag order. Dragging automatically flips the mode. Auto ranks by status: <strong>waiting → ignored → ready → working → done → idle</strong>. Manual uses per-terminal <code>order</code> values.</p>
-            <div class="mode-toggle" aria-hidden="true">
-              <span class="pill on">"auto"</span>
-              <span class="pill">"manual"</span>
-            </div>
-          </div>
-
-          <div class="feature">
-            <h3>One-click project add <span class="badge">v0.11.5</span></h3>
-            <p>Click <strong>"+"</strong> in the sidebar → pick a folder → name it → terminal opens with Claude running and a tile in the bar. No config editing, no reload. Sets <code>autoStart: true</code> so it reopens on next VS Code launch.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Debug log</h3>
-            <p>Flip <code>"debug": true</code> in the config. The extension streams hook events, state transitions, and auto-start decisions to a <strong>Claudelike Bar</strong> output channel. The hook and statusline scripts also write <code>{os.tmpdir()}/claude-dashboard/debug.log</code>. Useful when a tile seems stuck.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Windows / PowerShell support <span class="badge">v0.9.2</span></h3>
-            <p>Auto-start no longer assumes bash. <code>CLAUDELIKE_BAR_NAME</code> flows through VS Code's <code>createTerminal({env})</code> API — cross-platform, no <code>export</code> noise. Per-terminal <code>shellPath</code> lets you pin git-bash (or pwsh, or cmd) when your command needs a specific shell.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Standalone statusline <span class="badge">v0.9.2</span></h3>
-            <p>Context % comes from a completely-independent statusline script. Installing it is opt-in — if you already have one, a modal shows <em>both</em> the command being overwritten and the one being installed before you confirm. Your prior statusline backs up to <code>~/.claude/.claudelike-bar-statusline-backup.json</code>; a <strong>Restore Previous Statusline</strong> palette command (or Claude, via chat) puts it back.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Path-based project identity <span class="badge">v0.10</span></h3>
-            <p>Projects are keyed by absolute <code>path</code>, not terminal name. Collision-resistant slug derivation means two projects both named <code>api</code> in different trees get distinct identities (<code>client-a-api</code> vs <code>personal-api</code>). No more basename conflicts in monorepos or multi-root workspaces.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Global config at <code>~/.claude/</code> <span class="badge">v0.10</span></h3>
-            <p>Config moved from the workspace root to <code>~/.claude/claudelike-bar.jsonc</code> — one file across all workspaces, next to your hooks and settings. Workspace-local configs auto-migrate on first load. Two VS Code windows adding terminals simultaneously? Read-merge-write handles it.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Setup wizard <span class="badge">v0.11</span></h3>
-            <p>5-step QuickPick flow: pick your project folders (browse or scan workspace), confirm names with collision-resistant slugs, assign colors (auto round-robin or manual), choose a startup command, review and confirm. Run from the palette: <strong>Claudelike Bar: Set Up Projects</strong>.</p>
-          </div>
-
-          <div class="feature">
-            <h3>First-run walkthrough <span class="badge">v0.11</span></h3>
-            <p>VS Code's native walkthrough API guides new users through setup. The sidebar <strong>"+"</strong> button registers a project and opens the terminal immediately — folder picker, name it, Claude starts. No reload needed.</p>
-          </div>
-
-          <div class="feature">
-            <h3>Hook path-lookup index <span class="badge">v0.11</span></h3>
-            <p>Manual terminals (opened without auto-start) now resolve correctly. The extension writes a lightweight <code>~/.claude/claudelike-bar-paths.json</code> index — the hook reads it to map <code>cwd</code> to the right project slug. Atomic writes, trailing-slash normalized.</p>
-          </div>
-
+        <div class="always-on">
+          <p class="always-on__overline">Always on</p>
+          <h3>Five things that just work.</h3>
+          <ul>
+            <li><strong>Drag to reorder</strong> — grab any tile, drop where you want. Saved to <code>.claudelike-bar.jsonc</code>, survives reloads.</li>
+            <li><strong>Sort modes</strong> — <code>"auto"</code> floats waiting → ignored → ready → working → done → idle to the top; <code>"manual"</code> respects your drag order.</li>
+            <li><strong>Passive-aggressive mode</strong> — guilt-trips you when you ignore waiting tiles. Optional. The <em>patiently judging you</em> status is from this mode.</li>
+            <li><strong>Context tracking</strong> — mono <code>ctx %</code> badge on every tile, color-coded at 60% and 80%.</li>
+            <li><strong>Debug log</strong> — flip <code>"debug": true</code> and the extension streams hook events, state transitions, and auto-start decisions to an output channel.</li>
+          </ul>
         </div>
       </div>
     </section>
 
     <!-- ====== Configure via chat ====== -->
-    <section class="section" id="configure" aria-labelledby="configure-heading">
+    <section class="section section--surface" id="configure" aria-labelledby="configure-heading">
       <div class="section__container">
         <header class="section__header">
           <p class="section__overline">Configuration</p>
           <h2 class="section__heading" id="configure-heading">Configure it by talking to Claude.</h2>
           <p class="section__description">
-            The config file is <code style="font-family: var(--font-mono); background: oklch(0.78 0.14 55 / 0.1); color: var(--color-accent-primary); padding: 1px 6px; border-radius: 4px;">~/.claude/claudelike-bar.jsonc</code> — JSON with comments, auto-created when you first open a terminal. You <em style="color: var(--color-fg-base); font-style: italic;">can</em> edit it by hand. It's easier to just describe what you want.
+            The config file is <code style="font-family: var(--font-mono); background: oklch(0.78 0.14 55 / 0.1); color: var(--color-accent-primary); padding: 1px 6px; border-radius: 4px;">~/.claude/claudelike-bar.jsonc</code> — JSON with comments, auto-created. You <em style="color: var(--color-fg-base); font-style: italic;">can</em> edit it by hand. Most days, it's easier to just describe what you want.
           </p>
         </header>
 
@@ -1184,13 +1150,13 @@
         </div>
 
         <p class="chat-footnote">
-          Everything above is plain JSONC in <code>~/.claude/claudelike-bar.jsonc</code>. Comments, section headers, and defaults are preserved by the extension's round-trip save — feel free to hand-edit. Or run the setup wizard for a guided start. Most days, asking is easier.
+          Everything above is plain JSONC in <code>~/.claude/claudelike-bar.jsonc</code>. Comments, section headers, and defaults are preserved by the extension's round-trip save — feel free to hand-edit. Or run the setup wizard for a guided start.
         </p>
       </div>
     </section>
 
     <!-- ====== Install ====== -->
-    <section class="section section--surface" id="install" aria-labelledby="install-heading">
+    <section class="section" id="install" aria-labelledby="install-heading">
       <div class="section__container">
         <div class="install">
           <p class="section__overline" style="margin-bottom: var(--space-md);">Install</p>
@@ -1225,7 +1191,7 @@
     var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (prefersReducedMotion) {
-      document.querySelectorAll('.hero__overline, .hero__subhead, .hero__cta, .hero__scroll-indicator, .hero__rabbit').forEach(function (el) {
+      document.querySelectorAll('.hero__overline, .hero__subhead, .hero__cta, .hero__scroll-indicator, .hero__demo').forEach(function (el) {
         el.style.opacity = '1';
       });
       return;
@@ -1234,7 +1200,6 @@
     if (typeof gsap === 'undefined') return;
     gsap.registerPlugin(ScrollTrigger, SplitText);
 
-    // Lenis smooth scroll
     var lenis = new Lenis({
       duration: 1.2,
       easing: function (t) { return Math.min(1, 1.001 - Math.pow(2, -10 * t)); },
@@ -1246,7 +1211,6 @@
     gsap.ticker.add(function (time) { lenis.raf(time * 1000); });
     gsap.ticker.lagSmoothing(0);
 
-    // Nav scrolled state
     var nav = document.querySelector('.nav');
     ScrollTrigger.create({
       start: 'top -80px',
@@ -1256,7 +1220,6 @@
       }
     });
 
-    // Smooth anchor scroll
     document.querySelectorAll('a[href^="#"]').forEach(function (anchor) {
       anchor.addEventListener('click', function (e) {
         var href = this.getAttribute('href');
@@ -1269,7 +1232,6 @@
       });
     });
 
-    // Cursor spotlight
     var spotlight = document.querySelector('.cursor-spotlight');
     if (spotlight && window.matchMedia('(hover: hover)').matches) {
       document.addEventListener('mousemove', function (e) {
@@ -1278,14 +1240,13 @@
       });
     }
 
-    // Hero
     function initHero() {
       var headline = document.querySelector('.hero__headline');
       var overline = document.querySelector('.hero__overline');
       var subhead = document.querySelector('.hero__subhead');
       var cta = document.querySelector('.hero__cta');
+      var demo = document.querySelector('.hero__demo');
       var scrollIndicator = document.querySelector('.hero__scroll-indicator');
-      var heroRabbit = document.querySelector('.hero__rabbit');
       if (!headline) return;
 
       document.fonts.ready.then(function () {
@@ -1295,15 +1256,15 @@
         gsap.set(overline, { y: 20 });
         gsap.set(subhead, { y: 20 });
         gsap.set(cta, { y: 20 });
-        if (heroRabbit) gsap.set(heroRabbit, { scale: 0.85 });
+        if (demo) gsap.set(demo, { y: 40, scale: 0.97 });
 
         var tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
         tl.to(overline, { opacity: 1, y: 0, duration: 0.6 }, 0.2);
         tl.from(split.words, { y: '100%', duration: 0.9, stagger: 0.07 }, 0.4);
-        tl.to(subhead, { opacity: 1, y: 0, duration: 0.6 }, '-=0.3');
-        tl.to(cta, { opacity: 1, y: 0, duration: 0.6 }, '-=0.2');
+        if (demo) tl.to(demo, { opacity: 1, y: 0, scale: 1, duration: 1.0, ease: 'power2.out' }, 0.6);
+        tl.to(subhead, { opacity: 1, y: 0, duration: 0.6 }, '-=0.5');
+        tl.to(cta, { opacity: 1, y: 0, duration: 0.6 }, '-=0.3');
         tl.to(scrollIndicator, { opacity: 1, duration: 0.8 }, '-=0.1');
-        if (heroRabbit) tl.to(heroRabbit, { opacity: 1, scale: 1, duration: 1.4, ease: 'power2.out' }, 0.5);
 
         var resizeTimer;
         window.addEventListener('resize', function () {
@@ -1316,22 +1277,12 @@
       });
     }
 
-    // Hero parallax
-    function initHeroParallax() {
-      var decoration = document.querySelector('.hero__decoration');
-      if (!decoration) return;
-      gsap.to(decoration, {
-        y: -80, opacity: 0,
-        scrollTrigger: { trigger: '.hero', start: 'top top', end: 'bottom top', scrub: 0.5 }
-      });
-    }
-
-    // Scroll reveals
     function initScrollReveals() {
       var selectors = [
         '.section__header',
-        '.preview-shell',
-        '.feature',
+        '.closer-look > div',
+        '.changelog__entry',
+        '.always-on',
         '.turn',
         '.chat-footnote',
         '.install'
@@ -1355,29 +1306,24 @@
       });
     }
 
-    // Feature card subtle tilt on hover
-    function initFeatureTilt() {
-      if (!window.matchMedia('(hover: hover)').matches) return;
-      document.querySelectorAll('.feature').forEach(function (card) {
-        card.addEventListener('mousemove', function (e) {
-          var rect = card.getBoundingClientRect();
-          var x = (e.clientX - rect.left) / rect.width - 0.5;
-          var y = (e.clientY - rect.top) / rect.height - 0.5;
-          gsap.to(card, {
-            rotateY: x * 3, rotateX: y * -3,
-            duration: 0.4, ease: 'power2.out', transformPerspective: 800
-          });
-        });
-        card.addEventListener('mouseleave', function () {
-          gsap.to(card, { rotateY: 0, rotateX: 0, duration: 0.6, ease: 'power3.out' });
+    function initChangelogMarkers() {
+      document.querySelectorAll('.changelog__marker').forEach(function (marker, i) {
+        ScrollTrigger.create({
+          trigger: marker,
+          start: 'top 85%',
+          once: true,
+          onEnter: function () {
+            gsap.from(marker, {
+              scale: 0, duration: 0.5, ease: 'back.out(2)', delay: i * 0.05
+            });
+          }
         });
       });
     }
 
     initHero();
-    initHeroParallax();
     initScrollReveals();
-    initFeatureTilt();
+    initChangelogMarkers();
   })();
   </script>
 </body>

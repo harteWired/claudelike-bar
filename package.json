@@ -1,7 +1,7 @@
 {
   "name": "claudelike-bar",
   "displayName": "Claudelike Bar",
-  "description": "Sidebar dashboard with live status tiles for Claude Code terminal sessions",
+  "description": "Live sidebar for Claude Code terminals — see what every session is doing at a glance without tab-switching.",
   "version": "0.13.5",
   "publisher": "aes87",
   "repository": {

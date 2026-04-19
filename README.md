@@ -23,164 +23,51 @@ This fixes that.
 
 A VS Code sidebar that shows you — at a glance — what every Claude Code terminal is doing. Colored tiles, animated status dots, zero guesswork.
 
-## How to Install
+## Install
 
-### Prerequisites
+1. Install from [Open VSX](https://open-vsx.org/extension/aes87/claudelike-bar) — or any VS Code-compatible marketplace.
+2. VS Code prompts: **"Claudelike Bar needs hooks to track terminal status. Set up your projects now?"** Click **Set Up Projects** to run the wizard, or **Install Hooks Only** for a minimal start.
+3. Tiles start updating on your next Claude turn.
 
-- **VS Code** >= 1.93
-- **Claude Code** — the CLI, installed and working
-- **Node.js** — bundled with Claude Code, no separate install needed
+Prerequisites: **VS Code** ≥ 1.93, **Claude Code** CLI installed and working. No `jq`, no bash, no special tools.
 
-That's it. No `jq`, no bash, no special tools.
+Prefer the command line or want to see every step? See **[the full install guide](docs/install.md)** for CLI and manual setup.
 
-### The fast path
+## Core Features
 
-1. Install from [Open VSX](https://open-vsx.org/extension/aes87/claudelike-bar) — or any VS Code-compatible marketplace
-2. Open VS Code, you'll see a notification: **"Claudelike Bar needs hooks to track terminal status. Set up your projects now?"**
-3. Click **Set Up Projects** to run the wizard, or **Install Hooks Only** for a minimal start.
+- **Live status tiles** for every open Claude Code session — colored borders, animated dots, click to switch
+- **Smart sort** — `auto` floats sessions needing attention to the top; drag any tile to flip into `manual` mode
+- **Auto-start projects** — each terminal has its own startup command and working directory; opens on VS Code launch
+- **Context window %** — every tile shows how full the session's context is
+- **Two personality modes** — `chill` (quiet) or `passive-aggressive` (guilt-trips you with messages like "Patiently judging you")
+- **Audio alerts** — optional chime when Claude finishes, optional second sound for permission prompts; bring your own clips
+- **Setup wizard + walkthrough** — 5-step guided onboarding; VS Code's native walkthrough API for first-run
 
-The extension writes a hook script to `~/.claude/hooks/dashboard-status.js` and registers event handlers in `~/.claude/settings.json`. Config lives at `~/.claude/claudelike-bar.jsonc` — a single file across all workspaces. Tiles start updating on your next Claude turn.
+<details>
+<summary><b>More features</b> — drag-drop, pinning, offline tiles, remote dev, keyboard nav, mark-as-done, custom colors, nicknames, debug tracing</summary>
 
-You can also run install manually: `Cmd+Shift+P` → **Claudelike Bar: Install Hooks**.
-
-### Prefer the command line?
-
-Clone the repo and run:
-
-```bash
-./setup.sh
-```
-
-Builds the extension, installs the VSIX, copies the hook script, and merges settings.json entries. Idempotent.
-
-### Manual setup
-
-If you prefer to understand each step:
-
-**1. Build and install the extension**
-
-```bash
-npm install
-npm run package
-code --install-extension claudelike-bar-*.vsix --force
-```
-
-**2. Copy the hook script**
-
-```bash
-cp hooks/dashboard-status.js ~/.claude/hooks/
-chmod +x ~/.claude/hooks/dashboard-status.js
-```
-
-**3. Register hooks**
-
-Add these to `~/.claude/settings.json` under the `"hooks"` key. If you already have hooks for these events, add the dashboard entry alongside your existing ones — don't replace them.
-
-On Windows, prefix the command with `node` so it doesn't depend on shebang interpretation: `"node \"C:/Users/you/.claude/hooks/dashboard-status.js\""`. The `setup.sh` / `merge-hooks.js` flow handles this automatically.
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/dashboard-status.js" }] }],
-    "UserPromptSubmit": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/dashboard-status.js" }] }],
-    "Stop": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/dashboard-status.js" }] }],
-    "Notification": [{ "matcher": "", "hooks": [{ "type": "command", "command": "~/.claude/hooks/dashboard-status.js" }] }]
-  }
-}
-```
-
-**4. Reload VS Code** — `Cmd+Shift+P` → "Reload Window"
-
-### After install: set up your projects
-
-**Option A — Setup Wizard** (recommended for new users):
-
-`Cmd+Shift+P` → "Claudelike Bar: Set Up Projects"
-
-The wizard walks you through 5 steps: pick your project folders, confirm names, assign colors, choose a startup command, and review. Your projects auto-start on the next VS Code launch.
-
-**Option B — Let Claude do it:**
-
-Open a Claude Code terminal and say:
-
-> *"Walk me through configuring the Claudelike Bar."*
-
-Claude will read `~/.claude/claudelike-bar.jsonc`, ask what projects you care about, set up auto-start commands, pick a personality mode, assign colors, and nudge you to drag the tiles into order.
-
-**Option C — Edit the config directly:**
-
-`Cmd+Shift+P` → "Claudelike Bar: Open Config" — the JSONC file is documented with inline comments.
-
-## Features
-
-- **Setup wizard** — 5-step guided onboarding: pick folders, name projects, assign colors, choose command, review *(v0.11)*
-- **Global config** — single `~/.claude/claudelike-bar.jsonc` across all workspaces, auto-migrated from workspace-local *(v0.10)*
-- **Path-based identity** — projects keyed by absolute path, collision-resistant slugs, no more basename conflicts *(v0.10)*
-- **Live status tiles** for every open Claude Code session
-- **Animated dots** — green pulse (working), amber blink (waiting for you), cyan glow (done)
-- **Click to switch** — stops the raccoon behavior
-- **Sort modes** — `auto` (status-based: waiting floats to top) or `manual` (drag to arrange)
 - **Drag and drop reordering** — grab any tile, drop it where you want; order persists
 - **Mark as done** — right-click → "Mark as done" parks a session: sinks to bottom, goes quiet, ignores background events
-- **Two personality modes** — chill (quiet) or passive-aggressive (guilt trips)
-- **Context window %** — each tile shows how full the session's context is
-- **Color-coded borders** — per-terminal theme colors. Right-click a tile → swatch row + custom color picker (any CSS color) *(picker added v0.13.2)*
-- **Nicknames** — custom display names for terminals
-- **Auto-start** — mark terminals to launch on VS Code open, each with its own startup command and working directory
-- **First-run walkthrough** — VS Code's native walkthrough API guides new users *(v0.11)*
-- **Sidebar Add Project button** — one-click project registration from the empty state *(v0.11)*
-- **Keyboard nav** — arrow keys / j/k, Enter to switch
-- **Debug log** — toggle on to trace every hook event and state transition
-- **Cross-platform** — Windows, macOS, Linux; PowerShell, bash, zsh, fish
+- **Pinned tiles** — right-click → **Pin tile** to fix a terminal in a stable bottom zone regardless of `sortMode`. Useful for monitoring/infra tiles you want at known coordinates while urgent project tiles float to the top *(v0.13.4)*
+- **Offline tiles for registered projects** — every entry in your config that isn't currently running shows as a dim/dashed tile in its own zone at the bottom. Click to launch. Per-entry `hidden: true` opt-out, or `showRegisteredProjects: false` to disable globally *(v0.13.4)*
+- **Launch registered projects on demand** — palette command + sidebar rocket button + tile right-click. Pairs with the *Register only* option in **Register Project** for building a registry without spawning terminals *(v0.13)*
 - **Remote development** — runs on the workspace side in WSL2, SSH Remote, Dev Containers, and Codespaces, so hooks/config/status files all line up with where Claude Code actually lives *(v0.13.3)*
-- **Audio alerts** — optional chime when Claude finishes, optional second sound for permission prompts; bring your own clips *(v0.12)*
-- **Launch registered projects on demand** — palette command + sidebar rocket button + tile right-click "Launch another project…" — opens any config entry not currently running. Pairs with the *Register only* option in Register Project for building a registry without spawning terminals *(v0.13)*
+- **Custom colors** — per-terminal theme colors. Right-click a tile → swatch row + custom color picker (any CSS color) *(picker added v0.13.2)*
+- **Nicknames** — custom display names for terminals
+- **Keyboard nav** — arrow keys / j/k, Enter to switch
 - **Auto-start safety** — entries with missing `cwd` are skipped with a single summary toast instead of N modal errors *(v0.13.1)*
 - **"Switch to auto sort"** — when in manual mode, right-click any tile to flip back to status-based sort *(v0.13.1)*
-- **Pinned tiles** — right-click → Pin tile to fix a terminal in a stable bottom zone regardless of `sortMode`. Useful for monitoring/infra tiles you want at known coordinates while urgent project tiles float to the top *(v0.13.4)*
-- **Offline tiles for registered projects** — every entry in your config that isn't currently running shows as a dim/dashed tile in its own zone at the bottom of the bar. Click to launch. Per-entry `hidden: true` opt-out, or set `showRegisteredProjects: false` to disable globally *(v0.13.4)*
+- **Path-based identity** — projects keyed by absolute path, collision-resistant slugs, no more basename conflicts *(v0.10)*
+- **Global config** — single `~/.claude/claudelike-bar.jsonc` across all workspaces, auto-migrated from workspace-local *(v0.10)*
+- **Sidebar Add Project button** — one-click project registration from the empty state *(v0.11)*
+- **Debug log** — toggle on to trace every hook event and state transition
+- **Cross-platform** — Windows, macOS, Linux; PowerShell, bash, zsh, fish
 
-## Audio
-
-Optional sound when Claude is waiting on you. Off by default; drop your own
-MP3/WAV/OGG files into `~/.claude/sounds/` and point the config at them.
-Two slots — one for end-of-turn, one (optional) for mid-job permission
-prompts — so you can tell "done" apart from "blocked on approval" by ear.
-
-Quick setup:
-
-1. `Cmd+Shift+P` → **Claudelike Bar: Open Sounds Folder** (creates the
-   folder and drops a README in if it's empty).
-2. Put one or two short clips in — Mixkit, Pixabay, and Freesound all have
-   CC0 options. Filenames: letters, digits, dot, dash, underscore only.
-3. Edit `~/.claude/claudelike-bar.jsonc`:
-   ```jsonc
-   "audio": {
-     "enabled": true,
-     "volume": 0.6,
-     "sounds": { "ready": "chime.mp3", "permission": "ping.mp3" }
-   }
-   ```
-4. Or flip the switch without editing: `Cmd+Shift+P` → **Claudelike Bar:
-   Toggle Audio**, or right-click any tile → **Unmute Audio**.
-
-Focused tiles don't ding — you're already looking at them. Simultaneous
-finishes on multiple tiles coalesce into one sound. See
-[`docs/audio-setup.md`](docs/audio-setup.md) for the full guide.
+</details>
 
 ## How It Works
 
-```
-Claude Code hooks fire on events
-         ↓
-dashboard-status.js derives slug (env var → path index → basename)
-         ↓
-Writes JSON → {os.tmpdir()}/claude-dashboard/{slug}.json
-         ↓
-VS Code FileSystemWatcher picks it up
-         ↓
-Sidebar tiles update in real time
-```
+![Hook-to-tile pipeline — Claude Code event hooks (PreToolUse, Stop, UserPromptSubmit, Notification) fire dashboard-status.js, which derives a collision-free slug (env var → path index → basename), then writes an atomic JSON file to {tmpdir}/claude-dashboard/{slug}.json. On the VS Code side, a FileSystemWatcher observes that directory and the sidebar re-renders each tile with its colored border and animated status dot. Amber borders mark the entry point and the JSON-file bridge; teal marks the VS Code extension side.](./docs/images/pipeline.png)
 
 ### Statuses
 
@@ -201,70 +88,42 @@ All commands are available from the command palette (`Cmd+Shift+P` / `Ctrl+Shift
 
 | Command | What It Does |
 |---------|-------------|
-| **Set Up Projects** | 5-step setup wizard — pick folders, name projects, assign colors, choose command, review. Best for first-time setup or reconfiguring after an upgrade. |
-| **Register Project** | Add a project — folder picker, slug assignment, then asks whether to open the terminal now or just register it for later. Also the "+" button in the sidebar header. |
-| **Launch Registered Project** | Open any registered project that isn't already running. QuickPick of your config entries; picks routes through the same launch path as auto-start. Also the rocket icon in the sidebar header and "Launch another project…" in the tile context menu. |
+| **Set Up Projects** | 5-step setup wizard — pick folders, name projects, assign colors, choose command, review. Best for first-time setup. |
+| **Register Project** | Add a project — folder picker, slug assignment, asks whether to open the terminal now or just register it for later. Also the "+" button in the sidebar header. |
 | **Open Config** | Opens `~/.claude/claudelike-bar.jsonc` in the editor. Also available as the gear icon in the sidebar header. |
+
+<details>
+<summary><b>All commands</b> — install hooks, statusline, audio, launch, restore</summary>
+
+| Command | What It Does |
+|---------|-------------|
+| **Launch Registered Project** | Open any registered project that isn't already running. QuickPick of your config entries; routes through the same launch path as auto-start. Also the rocket icon in the sidebar header and "Launch another project…" in the tile context menu. |
 | **Install Hooks** | Copies the hook script to `~/.claude/hooks/` and registers event handlers in `~/.claude/settings.json`. Idempotent. |
 | **Install Statusline** | Installs the optional context % statusline script. Prompts before replacing an existing statusline. |
-| **Restore Previous Statusline** | Puts back the statusline that was replaced by "Install Statusline", from the backup file. |
+| **Restore Previous Statusline** | Puts back the statusline that was replaced by **Install Statusline**, from the backup file. |
 | **Show Me the Hooks** | Opens the hooks documentation in your browser — see exactly what gets written before installing. |
-| **Toggle Audio** | Flips `audio.enabled` in the config. Also wired to the tile context menu as "Mute Audio" / "Unmute Audio". |
+| **Toggle Audio** | Flips `audio.enabled` in the config. Also wired to the tile context menu as **Mute Audio** / **Unmute Audio**. |
 | **Open Sounds Folder** | Opens `~/.claude/sounds/` in your OS file manager. Creates the folder and a README on first call if it's empty. |
 
-## How to Configure
+</details>
 
-**The easiest way: just tell Claude Code what you want.** The config file is designed to be read and edited by Claude natively. Try:
+## Configure
 
-- *"Switch to passive-aggressive mode"*
-- *"Change the api terminal color to red"*
-- *"Auto-start world-domination when VS Code opens"*
-- *"Give the yeet-to-prod terminal a nickname"*
-
-Claude will read `~/.claude/claudelike-bar.jsonc`, make the change, and the extension picks it up immediately. No restart needed.
-
-### Manual configuration
-
-All settings live in `~/.claude/claudelike-bar.jsonc` — a single global file next to your Claude Code hooks and settings. Auto-created when you first open a terminal or run the setup wizard.
-
-You don't have to launch a terminal at registration time. The Register Project flow ends with a "Open terminal now / Register only" choice — pick "Register only" to add the entry with `autoStart: false` and open it later via **Launch Registered Project** (sidebar rocket icon, command palette, or the tile right-click menu).
-
-The file supports comments and is organized into sections:
+All settings live in `~/.claude/claudelike-bar.jsonc` — a single global file next to your Claude Code hooks and settings. `Cmd+Shift+P` → **Claudelike Bar: Open Config** to open it. Auto-created when you first open a terminal or run the setup wizard. Edits take effect immediately — no reload.
 
 ```jsonc
 {
-  // ┌─────────────────────────────────────────────┐
-  // │  BIG KNOBS                                  │
-  // └─────────────────────────────────────────────┘
-
   // "chill"              — terminals quietly fade to "Done"
   // "passive-aggressive" — guilt-trips you with snarky messages
   "mode": "chill",
 
   // "auto"   — sort tiles by status (waiting → ready → working → done → idle)
   // "manual" — respect drag-and-drop order from terminals[].order
-  // Dragging a tile auto-flips this to "manual".
   "sortMode": "auto",
 
   // Global command sent into auto-started terminals. Null to disable.
   // Per-terminal `command` below overrides this.
   "claudeCommand": null,
-
-  // Turn on to trace hook events and state transitions to the
-  // "Claudelike Bar" output channel + {os.tmpdir()}/claude-dashboard/debug.log
-  "debug": false,
-
-  // ┌─────────────────────────────────────────────┐
-  // │  FINE TUNING                                │
-  // └─────────────────────────────────────────────┘
-
-  "labels": { "idle": "Idle", "working": "Working", ... },
-  "contextThresholds": { "warn": 30, "crit": 50 },
-  "ignoredTexts": [ "Being ignored :(", ... ],
-
-  // ┌─────────────────────────────────────────────┐
-  // │  TERMINALS                                  │
-  // └─────────────────────────────────────────────┘
 
   "terminals": {
     "world-domination": {
@@ -286,77 +145,33 @@ The file supports comments and is organized into sections:
 }
 ```
 
-### Terminal options
+Full field reference, sorting rules, cross-platform auto-start, and context % integration: **[terminal configuration guide](docs/terminal-configuration.md)**.
 
-| Field | Type | Default | What It Does |
-|-------|------|---------|--------------|
-| `path` | string \| null | *unset* | Absolute path to the project directory. Canonical identity — used for matching hook updates to tiles and deriving collision-free status filenames. Also the default `cwd` when `cwd` is unset. Set automatically by the setup wizard or "Register Project" command. |
-| `color` | string | auto | Preset: `cyan`, `green`, `blue`, `magenta`, `yellow`, `white`, `red`. Or any CSS color: `#e06c75`, `rgb(224, 108, 117)`, `hsl(355, 65%, 65%)`, `var(--my-color)`. |
-| `icon` | string \| null | auto | Any [VS Code codicon](https://microsoft.github.io/vscode-codicons/dist/codicon.html) name |
-| `nickname` | string \| null | `null` | Display name shown on tile instead of terminal name |
-| `autoStart` | boolean | `false` | Launch this terminal when VS Code starts |
-| `cwd` | string \| null | *unset* | Working directory for the terminal. Cross-platform — passed through VS Code's `createTerminal({ cwd })` API, not shell syntax. Use this instead of `cd /path &&` in `command`. |
-| `command` | string \| null | *inherits `claudeCommand`* | Command sent to the terminal when auto-started. With `cwd` set, this can be a simple `"claude"` — no `cd`, no `&&`, works on every shell. Omit the field to inherit the global default; set to `null` to open the terminal without running anything. |
-| `order` | number | *unset* | Manual sort position (set by drag-and-drop). Only used when top-level `sortMode` is `"manual"`. |
+> [!TIP]
+> **Or just ask Claude.** Open a Claude Code terminal and say *"switch to passive-aggressive mode"*, *"change the api terminal color to red"*, *"auto-start world-domination when VS Code opens"*. Claude reads the JSONC, makes the change, and the extension picks it up immediately.
 
-Edit the file directly — changes take effect immediately. Claude Code can also read and modify it natively.
+## Audio
 
-### Sorting tiles
+Optional sound when Claude is waiting on you. Off by default. Drop your own MP3/WAV/OGG files into `~/.claude/sounds/` and point the config at them. Two slots — one for end-of-turn, one (optional) for mid-job permission prompts — so you can tell "done" apart from "blocked on approval" by ear.
 
-Two modes, set by the top-level `sortMode` key:
+Quick setup:
 
-- **`"auto"`** *(default)* — tiles are sorted by status so things needing attention float to the top: `waiting → ignored → ready → working → done → idle`. Most-recent activity wins within a status group.
-- **`"manual"`** — tiles use the per-terminal `order` values (assigned by dragging). New/unordered tiles sink to the bottom.
+1. `Cmd+Shift+P` → **Claudelike Bar: Open Sounds Folder** (creates the folder and drops a README in if it's empty).
+2. Put one or two short clips in — Mixkit, Pixabay, and Freesound all have CC0 options.
+3. Edit `~/.claude/claudelike-bar.jsonc`:
+   ```jsonc
+   "audio": {
+     "enabled": true,
+     "volume": 0.6,
+     "sounds": { "ready": "chime.mp3", "permission": "ping.mp3" }
+   }
+   ```
+4. Or flip the switch without editing: `Cmd+Shift+P` → **Claudelike Bar: Toggle Audio**, or right-click any tile → **Unmute Audio**.
 
-You can drag tiles in either mode — dragging automatically flips `sortMode` to `"manual"`. To go back to status-based sort, set `"sortMode": "auto"` (the `order` values are left in place, harmlessly ignored, and restored if you switch back).
+Focused tiles don't ding — you're already looking at them. Simultaneous finishes on multiple tiles coalesce into one sound. Full guide: [audio setup](docs/audio-setup.md).
 
-### Cross-platform auto-start (Windows, macOS, Linux)
-
-Use `cwd` + `command` instead of baking `cd /path && claude` into the command string. `cwd` goes through VS Code's API — works on every shell, every platform:
-
-```jsonc
-"my-project": {
-  "autoStart": true,
-  "cwd": "C:\\Users\\you\\projects\\foo",
-  "command": "claude"
-}
-```
-
-This is the recommended pattern. `command` is just the thing to run — no `cd`, no `&&`, no shell-specific syntax. Works identically on PowerShell, bash, zsh, cmd, fish.
-
-**Legacy `cd && claude` commands still work** — they're sent via `sendText()` and execute in whatever shell the terminal runs. But `&&` fails on PowerShell 5.1 (Windows default), so new configs should use `cwd` instead.
-
-**If you need a specific shell** (e.g., git-bash for legacy commands): set `shellPath` per terminal:
-```jsonc
-"shellPath": "C:\\Program Files\\Git\\bin\\bash.exe"
-```
-
-The `CLAUDELIKE_BAR_NAME` env var is set through VS Code's `createTerminal({ env })` API — no shell syntax, every platform.
-
-### Context % (Optional Enhancement)
-
-Context % on tiles comes from a Claude Code statusline script that writes `context_percent` into the status file. The extension ships a standalone one — it's completely independent of the rest of the extension and shares only the status-file format.
-
-**If you don't already have a statusline configured:** the extension offers to install ours during first-run onboarding. You can also run it any time: `Cmd+Shift+P` → **Claudelike Bar: Install Statusline**.
-
-**If you already have a statusline:** running **Install Statusline** will prompt before replacing it — confirming backs up the prior `statusLine` value to `~/.claude/.claudelike-bar-statusline-backup.json`. To restore, run **Claudelike Bar: Restore Previous Statusline** (see Troubleshooting).
-
-**Writing your own statusline integration** — any script that writes the status file format works. The contract:
-
-- **Location** — `{os.tmpdir()}/claude-dashboard/{project}.json`
-- **Project** — `process.env.CLAUDELIKE_BAR_NAME` if set, else `path.basename(cwd)`, sanitized (strip path separators, leading/trailing dots)
-- **Required field** — `context_percent: number` (0–100)
-- **Atomic write** — tmp file + rename, otherwise the hook's concurrent writes will race with yours and clobber status fields. Pattern used by the shipped scripts:
-  ```js
-  const tmp = `${file}.tmp.${process.pid}`;
-  fs.writeFileSync(tmp, JSON.stringify(payload) + '\n');
-  fs.renameSync(tmp, file);
-  ```
-- **Merge, don't overwrite** — the hook writes `status`/`event`/`timestamp` into the same file. Read-merge-write so you don't wipe them.
-
-The shipped script at `hooks/claudelike-statusline.js` is the reference implementation; copy from it rather than inlining — it handles cwd fallbacks, sanitization, atomic writes, and debug logging.
-
-## Troubleshooting
+<details>
+<summary><b>Troubleshooting</b> — activation errors, stuck tiles, missing hooks, statusline restore</summary>
 
 **Extension crashes on activation (`Cannot find module './impl/format'`)**
 - This happens when the esbuild bundle didn't properly inline `jsonc-parser`'s internal modules. Rebuild:
@@ -399,15 +214,7 @@ The shipped script at `hooks/claudelike-statusline.js` is the reference implemen
 - Rebuild from source: `npm run build && npm run package && code --install-extension claudelike-bar-*.vsix --force`
 - Check activation logs for the specific error
 
-## Upgrading
-
-```bash
-cd claudelike-bar
-git pull
-./setup.sh
-```
-
-The setup script is idempotent — it won't duplicate hooks or break existing config.
+</details>
 
 ## License
 

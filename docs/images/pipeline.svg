@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400">
+  <defs>
+    <marker id="arrowFlow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#6fd1b4"/>
+    </marker>
+    <filter id="editorialGrain" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+      <feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.08 0"/>
+    </filter>
+    <radialGradient id="editorialTopGlow" cx="50%" cy="0%" r="80%">
+      <stop offset="0%" stop-color="#e6a562" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#e6a562" stop-opacity="0"/>
+    </radialGradient>
+    <style>
+    text { font-family: 'Inter', 'Noto Sans', 'Helvetica Neue', 'DejaVu Sans', sans-serif; }
+    .title { font-size: 46px; font-weight: 700; fill: #f5efe0; font-family: 'Playfair Display', 'Noto Serif Display', 'DejaVu Serif', Georgia, serif; }
+    .subtitle { font-size: 12px; font-weight: 500; fill: #e6a562; letter-spacing: 0.3em; text-transform: uppercase; }
+    .lane-label { font-size: 12px; font-weight: 700; fill: #b5b3a8; letter-spacing: 0.22em; text-transform: uppercase; }
+    .lane-label-ok { font-size: 12px; font-weight: 700; fill: #6fd1b4; letter-spacing: 0.22em; text-transform: uppercase; }
+    .node-title { font-size: 18px; font-weight: 700; fill: #f5efe0; }
+    .node-sub { font-size: 11px; font-weight: 500; fill: #d4cfbf; }
+    .node-type { font-size: 10px; font-weight: 700; fill: #b5b3a8; letter-spacing: 0.08em; }
+    .legend { font-size: 12px; font-weight: 500; fill: #d4cfbf; }
+    </style>
+  </defs>
+  <rect width="1280" height="400" fill="#15151e"/>
+  <rect width="1280" height="220" fill="url(#editorialTopGlow)"/>
+  <rect width="1280" height="400" filter="url(#editorialGrain)" opacity="0.6"/>
+
+  <text x="640" y="56" text-anchor="middle" class="title">Hook-to-Tile Pipeline</text>
+  <text x="640" y="82" text-anchor="middle" class="subtitle">How Claudelike Bar keeps track</text>
+
+  <!-- Lane labels above the flow -->
+  <text x="60" y="145" class="lane-label">Claude Code side</text>
+  <text x="850" y="145" class="lane-label-ok">VS Code side</text>
+
+  <!-- Divider dashes between the two sides, under the JSON bridge -->
+  <line x1="830" y1="165" x2="830" y2="325" stroke="rgba(245,239,224,0.10)" stroke-width="1" stroke-dasharray="4,6"/>
+
+  <!-- Node 1: Claude Code hooks -->
+  <rect x="60" y="180" width="170" height="130" rx="8" fill="#24222f" stroke="#e6a562" stroke-width="2.0"/>
+  <rect x="66" y="186" width="158" height="118" rx="5" fill="none" stroke="#e6a562" stroke-width="1.2" opacity="0.55"/>
+  <text x="145" y="200" text-anchor="middle" class="node-type">EVENT</text>
+  <text x="145" y="238" text-anchor="middle" class="node-title">Claude Code</text>
+  <text x="145" y="260" text-anchor="middle" class="node-title">hooks fire</text>
+  <text x="145" y="282" text-anchor="middle" class="node-sub">PreToolUse · Stop</text>
+  <text x="145" y="297" text-anchor="middle" class="node-sub">UserPromptSubmit · Notification</text>
+
+  <!-- Node 2: dashboard-status.js -->
+  <rect x="250" y="180" width="170" height="130" rx="8" fill="#24222f" stroke="rgba(245,239,224,0.22)" stroke-width="1.6"/>
+  <text x="335" y="200" text-anchor="middle" class="node-type">SCRIPT</text>
+  <text x="335" y="248" text-anchor="middle" class="node-title">dashboard-</text>
+  <text x="335" y="270" text-anchor="middle" class="node-title">status.js</text>
+  <text x="335" y="292" text-anchor="middle" class="node-sub">hook handler</text>
+
+  <!-- Node 3: derive slug -->
+  <rect x="440" y="180" width="170" height="130" rx="8" fill="#24222f" stroke="rgba(245,239,224,0.22)" stroke-width="1.6"/>
+  <text x="525" y="200" text-anchor="middle" class="node-type">STEP</text>
+  <text x="525" y="248" text-anchor="middle" class="node-title">derive slug</text>
+  <text x="525" y="278" text-anchor="middle" class="node-sub">env var →</text>
+  <text x="525" y="293" text-anchor="middle" class="node-sub">path index → basename</text>
+
+  <!-- Node 4: write JSON (central bridge, amber emphasis) -->
+  <rect x="630" y="180" width="200" height="130" rx="8" fill="#24222f" stroke="#e6a562" stroke-width="2.0"/>
+  <rect x="636" y="186" width="188" height="118" rx="5" fill="none" stroke="#e6a562" stroke-width="1.2" opacity="0.55"/>
+  <text x="730" y="200" text-anchor="middle" class="node-type">BRIDGE</text>
+  <text x="730" y="238" text-anchor="middle" class="node-title">write JSON</text>
+  <text x="730" y="270" text-anchor="middle" class="node-sub">{tmpdir}/claude-dashboard/</text>
+  <text x="730" y="285" text-anchor="middle" class="node-sub">{slug}.json</text>
+  <text x="730" y="301" text-anchor="middle" class="node-sub" opacity="0.65">atomic rename</text>
+
+  <!-- Node 5: FileSystemWatcher -->
+  <rect x="850" y="180" width="180" height="130" rx="8" fill="#24222f" stroke="#6fd1b4" stroke-width="1.8"/>
+  <text x="940" y="200" text-anchor="middle" class="node-type">WATCHER</text>
+  <text x="940" y="248" text-anchor="middle" class="node-title">FileSystem-</text>
+  <text x="940" y="270" text-anchor="middle" class="node-title">Watcher</text>
+  <text x="940" y="292" text-anchor="middle" class="node-sub">VS Code API</text>
+
+  <!-- Node 6: sidebar tiles -->
+  <rect x="1050" y="180" width="170" height="130" rx="8" fill="#24222f" stroke="#6fd1b4" stroke-width="2.0"/>
+  <rect x="1056" y="186" width="158" height="118" rx="5" fill="none" stroke="#6fd1b4" stroke-width="1.2" opacity="0.55"/>
+  <text x="1135" y="200" text-anchor="middle" class="node-type">UI</text>
+  <text x="1135" y="238" text-anchor="middle" class="node-title">sidebar tiles</text>
+  <text x="1135" y="260" text-anchor="middle" class="node-title">update</text>
+  <text x="1135" y="282" text-anchor="middle" class="node-sub">colored border +</text>
+  <text x="1135" y="297" text-anchor="middle" class="node-sub">animated status dot</text>
+
+  <!-- Arrows between adjacent nodes -->
+  <path d="M 230,245 L 250,245" fill="none" stroke="#6fd1b4" stroke-width="1.8" marker-end="url(#arrowFlow)"/>
+  <path d="M 420,245 L 440,245" fill="none" stroke="#6fd1b4" stroke-width="1.8" marker-end="url(#arrowFlow)"/>
+  <path d="M 610,245 L 630,245" fill="none" stroke="#6fd1b4" stroke-width="1.8" marker-end="url(#arrowFlow)"/>
+  <path d="M 830,245 L 850,245" fill="none" stroke="#6fd1b4" stroke-width="1.8" marker-end="url(#arrowFlow)"/>
+  <path d="M 1030,245 L 1050,245" fill="none" stroke="#6fd1b4" stroke-width="1.8" marker-end="url(#arrowFlow)"/>
+
+  <!-- Legend -->
+  <rect x="60" y="350" width="18" height="10" rx="2" fill="#24222f" stroke="#e6a562" stroke-width="1.5"/>
+  <text x="90" y="360" class="legend">Amber border — entry point or bridge</text>
+
+  <rect x="360" y="350" width="18" height="10" rx="2" fill="#24222f" stroke="#6fd1b4" stroke-width="1.5"/>
+  <text x="390" y="360" class="legend">Teal border — VS Code extension</text>
+
+  <line x1="680" y1="355" x2="712" y2="355" stroke="#6fd1b4" stroke-width="1.8" marker-end="url(#arrowFlow)"/>
+  <text x="722" y="360" class="legend">Data flow</text>
+</svg>

@@ -336,47 +336,103 @@ describe('TerminalTracker v0.9 — multi-agent state', () => {
     expect(getTile()?.pendingSubagents).toBe(0);
   });
 
-  // --- The actual bug fix: ready suppression when subagents pending ---
+  // --- v0.14.1 (#16): Stop as authoritative end-of-turn + Notification suppress ---
 
-  it('Stop/ready SUPPRESSED when pendingSubagents > 0 (the bug fix)', () => {
+  it('Stop zeros the subagent counter and transitions to ready', () => {
+    // v0.14.1 (#16): Task tool is synchronous — parent Stop means subagents
+    // already finished. Any non-zero counter at Stop is drift from dropped
+    // SubagentStop events on the shared status file. Trust the Stop signal.
     tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
     tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
-    // Parent's Stop fires while subagent still running
     tracker.updateStatus('my-project', 'ready', 'Stop');
-    // Tile should stay working, NOT transition to ready
-    expect(getTile()?.status).toBe('working');
-  });
-
-  it('Stop/ready resumes normal transition when counter drops to 0', () => {
-    tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
-    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
-    tracker.updateStatus('my-project', 'ready', 'Stop'); // suppressed
-    expect(getTile()?.status).toBe('working');
-    tracker.updateStatus('my-project', 'subagent_stop', 'SubagentStop');
-    // When counter drops to 0, SubagentStop itself promotes to ready
-    // (handles the case where Stop was suppressed and won't re-fire)
-    expect(getTile()?.status).toBe('ready');
-  });
-
-  it('SubagentStop after suppressed Stop promotes tile to ready (fallback)', () => {
-    // This is the worst-case ordering: Stop fires while subagent still running,
-    // gets suppressed. Without promotion-on-stop, the tile would be stuck.
-    tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
-    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
-    tracker.updateStatus('my-project', 'ready', 'Stop'); // suppressed — subagent still pending
-    expect(getTile()?.status).toBe('working');
-    // SubagentStop brings counter to 0 — should promote to ready
-    tracker.updateStatus('my-project', 'subagent_stop', 'SubagentStop');
     expect(getTile()?.status).toBe('ready');
     expect(getTile()?.pendingSubagents).toBe(0);
   });
 
-  it('SubagentStop does not promote to ready while teammate is idle', () => {
+  it('Stop clears stale drift that accumulated across turns', () => {
+    // Regression guard for #16: simulate 12 SubagentStart events with only
+    // 4 SubagentStop events arriving (8 lost to file-coalescing). Without
+    // the fix the counter wedges the tile on "Working (N agents)" until
+    // UserPromptSubmit. With the fix, next parent Stop unwedges.
+    tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
+    for (let i = 0; i < 12; i++) {
+      tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
+    }
+    for (let i = 0; i < 4; i++) {
+      tracker.updateStatus('my-project', 'subagent_stop', 'SubagentStop');
+    }
+    expect(getTile()?.pendingSubagents).toBe(8); // drift: 8 lost SubagentStops
+    tracker.updateStatus('my-project', 'ready', 'Stop');
+    expect(getTile()?.status).toBe('ready');
+    expect(getTile()?.pendingSubagents).toBe(0);
+  });
+
+  it('Stop zeros subagentPermissionPending alongside the counter', () => {
+    tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
+    // Mid-job permission prompt during subagent work — raises the flag.
+    tracker.updateStatus('my-project', 'ready', 'Notification', undefined, {
+      notification_type: 'permission_prompt',
+    });
+    expect(getTile()?.subagentPermissionPending).toBe(true);
+    // Parent Stop must clear both the counter and the (now-stale) flag so
+    // the group's wrap-up doesn't get mislabeled on the next cycle.
+    tracker.updateStatus('my-project', 'ready', 'Stop');
+    expect(getTile()?.pendingSubagents).toBe(0);
+    expect(getTile()?.subagentPermissionPending).toBe(false);
+  });
+
+  it('Stop stays working when teammateIdle is true (counter zeroed, teammate authoritative)', () => {
+    // teammate_idle is an Agent Teams signal, not derived from a lossy
+    // event stream — trust it. Zero the counter on Stop but keep the
+    // working state because the teammate is still waiting for a peer.
+    tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
+    tracker.updateStatus('my-project', 'teammate_idle', 'TeammateIdle');
+    tracker.updateStatus('my-project', 'ready', 'Stop');
+    expect(getTile()?.status).toBe('working');
+    expect(getTile()?.pendingSubagents).toBe(0);
+    expect(getTile()?.teammateIdle).toBe(true);
+  });
+
+  it('Notification does NOT zero the subagent counter (mid-turn signal, different semantics)', () => {
+    // Only Stop is the authoritative end-of-turn signal. A Notification
+    // arriving while subagents run legitimately surfaces a mid-job prompt;
+    // zeroing would clobber the in-flight counter and break the permission
+    // label routing on the next cycle.
+    tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
+    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
+    tracker.updateStatus('my-project', 'ready', 'Notification', undefined, {
+      notification_type: 'permission_prompt',
+    });
+    expect(getTile()?.pendingSubagents).toBe(2);
+  });
+
+  it('Subagent lifecycle after Stop-reset works normally (re-entry)', () => {
+    // After Stop zeros the counter, if another turn fires subagents, the
+    // counter starts fresh from 0 and the usual increment/decrement flow
+    // applies — no lingering floor effects from the reset.
+    tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
+    tracker.updateStatus('my-project', 'ready', 'Stop');
+    expect(getTile()?.pendingSubagents).toBe(0);
+    // New turn starts.
+    tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
+    tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
+    expect(getTile()?.pendingSubagents).toBe(2);
+    tracker.updateStatus('my-project', 'subagent_stop', 'SubagentStop');
+    tracker.updateStatus('my-project', 'subagent_stop', 'SubagentStop');
+    expect(getTile()?.pendingSubagents).toBe(0);
+  });
+
+  it('SubagentStop with counter=0 and teammate idle leaves status working (teammate suppress)', () => {
     tracker.updateStatus('my-project', 'working', 'UserPromptSubmit');
     tracker.updateStatus('my-project', 'subagent_start', 'SubagentStart');
     tracker.updateStatus('my-project', 'teammate_idle', 'TeammateIdle');
     tracker.updateStatus('my-project', 'subagent_stop', 'SubagentStop');
-    // Counter at 0 but teammate still idle — stay working
+    // Counter at 0 but teammate still idle — stay working.
     expect(getTile()?.status).toBe('working');
     expect(getTile()?.teammateIdle).toBe(true);
   });

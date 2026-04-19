@@ -508,6 +508,27 @@ export class TerminalTracker implements vscode.Disposable {
         //   event was actually a Notification — the hook's read-merge-write
         //   persists the field into Stop events that don't carry it.
         const notifType = event === 'Notification' ? extra?.notification_type : undefined;
+        // v0.14.1 (#16): zero the subagent counter on parent Stop. The
+        // counter is derived from a stream of SubagentStart/SubagentStop
+        // events that share a single status JSON file with every other
+        // hook event for this project — the FileSystemWatcher's debounce
+        // coalesces rapid-fire writes, so SubagentStop events get dropped
+        // when subagents fan out fast. Each lost Stop permanently inflates
+        // the counter for the rest of the session, eventually wedging the
+        // tile in `Working (N agents)` because hasActiveWork below
+        // suppresses the ready transition.
+        // Stop is the authoritative end-of-parent-turn signal — Claude
+        // Code's Task tool is synchronous, so the parent doesn't fire Stop
+        // until subagents have actually finished. Any non-zero count here
+        // is by definition stale drift, not in-flight work. Zeroing on
+        // Stop unwedges the tile and restores agreement with the on-disk
+        // status. Notification is intentionally NOT reset — that fires
+        // mid-turn and the existing subagentPermissionPending logic still
+        // routes mid-turn permission prompts correctly.
+        if (event === 'Stop') {
+          tile.pendingSubagents = 0;
+          tile.subagentPermissionPending = false;
+        }
         const hasActiveWork = (tile.pendingSubagents ?? 0) > 0 || tile.teammateIdle;
         if (hasActiveWork) {
           // v0.9.3 (F6): a permission_prompt arriving while subagents are

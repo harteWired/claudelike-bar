@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { ThemeGroup, getDefaultColor, ICON_MAP, AudioConfig } from './types';
-import { claudeDir, globalConfigPath, pathIndexPath, soundsDir } from './claudePaths';
+import { claudeDir, globalConfigPath, pathIndexPath, soundsDir, DEFAULT_TURN_DONE_SOUND } from './claudePaths';
 
 export interface TerminalConfig {
   color: ThemeGroup | 'red' | string;
@@ -193,16 +193,33 @@ export class ConfigManager implements vscode.Disposable {
   // validated result so hot-path callers (every state transition + every
   // refreshTiles) don't pay the sync I/O tax. Invalidated on reload.
   private _audioConfigCache: AudioConfig | undefined;
+  // v0.14 — when set, validateSlot falls back to this dir if a filename
+  // doesn't exist in the user's `~/.claude/sounds/`. Lets bundled defaults
+  // resolve without the user having to hand-copy them. Unset in tests that
+  // don't need bundled resolution — they just use the per-test temp dir.
+  private _bundledSoundsDir: string | undefined;
 
-  constructor(configPathOverride?: string) {
+  constructor(configPathOverride?: string, bundledSoundsDirOverride?: string) {
     // v0.10.1 — config lives at ~/.claude/claudelike-bar.jsonc (user-global).
     // Workspace-local files are checked only for one-time migration.
     // configPathOverride is for testing only — lets tests point at a temp dir.
     this.configPath = configPathOverride ?? globalConfigPath();
+    this._bundledSoundsDir = bundledSoundsDirOverride;
 
     this.load();
     this.setupWatcher();
     this.disposables.push(this.onChangeEmitter);
+  }
+
+  /**
+   * Late-set the bundled-sounds dir (after construction). Used when the
+   * ConfigManager is built before the extension's `context.extensionPath`
+   * is handy, e.g. in a subset of initialization orderings.
+   */
+  setBundledSoundsDir(dir: string | undefined): void {
+    if (this._bundledSoundsDir === dir) return;
+    this._bundledSoundsDir = dir;
+    this._audioConfigCache = undefined;
   }
 
   private load(): void {
@@ -369,15 +386,19 @@ export class ConfigManager implements vscode.Disposable {
       turnDone?: unknown;
       midJobPrompt?: unknown;
     };
+    const bundled = this._bundledSoundsDir;
     const validateSlot = (value: unknown): string | null => {
       if (typeof value !== 'string' || value.length === 0) return null;
       if (!AUDIO_FILENAME_RE.test(value)) return null;
       try {
-        if (!fs.existsSync(path.join(dir, value))) return null;
+        if (fs.existsSync(path.join(dir, value))) return value;
+        // v0.14 — fall back to bundled sounds dir so shipped defaults like
+        // `turn-done-default.mp3` resolve without a user-dir copy.
+        if (bundled && fs.existsSync(path.join(bundled, value))) return value;
       } catch {
         return null;
       }
-      return value;
+      return null;
     };
     // v0.14 — new names win, legacy names fall back. A config that still has
     // `ready`/`permission` keeps working; on next save the serializer drops
@@ -685,13 +706,22 @@ export class ConfigManager implements vscode.Disposable {
     // are read back but never written — this migrates configs in place on
     // first save. New-name wins if both are present in the raw config.
     const rawSounds = (rawAudio.sounds ?? {}) as Record<string, unknown>;
+    // If the user has never touched `audio.sounds` at all (fresh config,
+    // never-configured audio), seed `turnDone` with the bundled default so
+    // a new user hears something on first enable. `Object.keys(rawSounds)`
+    // is 0 for both undefined and `{}`. Users who explicitly set `turnDone:
+    // null` keep their explicit null — `rawSounds` has a key in that case.
+    const freshAudioBlock = Object.keys(rawSounds).length === 0;
+    const turnDoneSerialized = freshAudioBlock
+      ? DEFAULT_TURN_DONE_SOUND
+      : ((rawSounds.turnDone as string | null | undefined)
+          ?? (rawSounds.ready as string | null | undefined) ?? null);
     const audio: AudioConfigRaw = {
       enabled: rawAudio.enabled === true,
       volume: typeof rawAudio.volume === 'number' ? rawAudio.volume : DEFAULT_AUDIO_VOLUME,
       debounceMs: typeof rawAudio.debounceMs === 'number' ? rawAudio.debounceMs : DEFAULT_AUDIO_DEBOUNCE_MS,
       sounds: {
-        turnDone: (rawSounds.turnDone as string | null | undefined)
-          ?? (rawSounds.ready as string | null | undefined) ?? null,
+        turnDone: turnDoneSerialized,
         midJobPrompt: (rawSounds.midJobPrompt as string | null | undefined)
           ?? (rawSounds.permission as string | null | undefined) ?? null,
         // Carry through any unknown slot keys (future states). Drop the
@@ -769,6 +799,9 @@ export class ConfigManager implements vscode.Disposable {
       '  //   midJobPrompt — plays when Claude blocks mid-job on a prompt',
       '  //                  (Notification). Falls back to turnDone if unset.',
       '  // Renamed in v0.14 from ready/permission — old names still read.',
+      '  // Bundled defaults: `turn-done-default.mp3` (seeded here) and',
+      '  // `can-crack.mp3` — filenames resolve from the extension if you',
+      '  // haven\'t copied same-named files into ~/.claude/sounds/.',
       `  "audio": ${indent(JSON.stringify(audio, null, 4), 2)},`,
       '',
       '  // \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510',

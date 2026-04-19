@@ -29,7 +29,14 @@ const AUTO_START_REVIVE_GRACE_MS = 1200;
 type LogFn = (msg: string | (() => string)) => void;
 
 export function activate(context: vscode.ExtensionContext) {
-  const configManager = new ConfigManager();
+  // v0.14 — wire the bundled-sounds dir so `turn-done-default.mp3` and
+  // `can-crack.mp3` resolve without the user copying them into
+  // ~/.claude/sounds/. Path is fine to join synchronously — it's only
+  // validated lazily on each getAudioConfig() call.
+  const configManager = new ConfigManager(
+    undefined,
+    path.join(context.extensionPath, 'media', 'sounds'),
+  );
 
   // Debug output channel — always created, only written to when debug is on.
   // Accepts a thunk so callers can defer expensive string building.

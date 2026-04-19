@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
 import * as path from 'path';
 import { TileData, WebviewMessage, AudioPlayMessage, AudioAck } from './types';
 import { soundsDir } from './claudePaths';
@@ -64,15 +65,28 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * v0.12 — resolve a sound filename from `~/.claude/sounds/` to a webview
-   * URI and post a play message. Silently no-ops when the sidebar hasn't
-   * been resolved yet (first-session cold webview).
+   * Resolve a sound filename to a webview URI and post a play message.
+   * Silently no-ops when the sidebar hasn't been resolved yet (first-session
+   * cold webview).
+   *
+   * Resolution order:
+   *   1. `~/.claude/sounds/<filename>` — user-dropped file wins
+   *   2. `<extension>/media/sounds/<filename>` — bundled default (v0.14)
+   *
+   * Both roots are in `localResourceRoots` so either URI can be decoded by
+   * the webview's media-src CSP.
    */
   postPlay(filename: string, volume: number): void {
     if (!this.view) return;
     let url = this.soundUriCache.get(filename);
     if (!url) {
-      const fileUri = vscode.Uri.file(path.join(soundsDir(), filename));
+      const userPath = path.join(soundsDir(), filename);
+      let fsPath = userPath;
+      if (!fs.existsSync(userPath)) {
+        const bundledPath = path.join(this.extensionUri.fsPath, 'media', 'sounds', filename);
+        if (fs.existsSync(bundledPath)) fsPath = bundledPath;
+      }
+      const fileUri = vscode.Uri.file(fsPath);
       url = this.view.webview.asWebviewUri(fileUri).toString();
       this.soundUriCache.set(filename, url);
     }

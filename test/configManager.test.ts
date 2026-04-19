@@ -524,6 +524,88 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
       cm = undefined as any;
     });
 
+    it('v0.14 bundled fallback: filename resolves from bundled dir when missing in user dir', () => {
+      // Two separate dirs — user dir empty, bundled dir has the file. The
+      // validator must resolve the slot via bundled fallback.
+      const bundledDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bundled-'));
+      try {
+        fs.writeFileSync(path.join(bundledDir, 'turn-done-default.mp3'), 'x');
+        writeConfig({
+          terminals: {},
+          audio: { enabled: true, sounds: { turnDone: 'turn-done-default.mp3' } },
+        });
+        const cm2 = new ConfigManager(path.join(tmpWorkspace, '.claudelike-bar.jsonc'), bundledDir);
+        const audio = cm2.getAudioConfig(soundsDir);
+        expect(audio.sounds.turnDone).toBe('turn-done-default.mp3');
+        cm2.dispose();
+      } finally {
+        fs.rmSync(bundledDir, { recursive: true, force: true });
+      }
+    });
+
+    it('v0.14 bundled fallback: user dir wins over bundled dir for same filename', () => {
+      dropFile('turn-done-default.mp3'); // user-dir version
+      const bundledDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bundled-'));
+      try {
+        // Bundled also has a file with the same name — user dir should win,
+        // but since validateSlot only returns the filename (not a path), the
+        // fact that both exist only matters for the downstream URI resolver.
+        // This test guards that the slot is considered VALID when either
+        // dir has it, not silently nulled due to conflicting state.
+        fs.writeFileSync(path.join(bundledDir, 'turn-done-default.mp3'), 'x');
+        writeConfig({
+          terminals: {},
+          audio: { enabled: true, sounds: { turnDone: 'turn-done-default.mp3' } },
+        });
+        const cm2 = new ConfigManager(path.join(tmpWorkspace, '.claudelike-bar.jsonc'), bundledDir);
+        const audio = cm2.getAudioConfig(soundsDir);
+        expect(audio.sounds.turnDone).toBe('turn-done-default.mp3');
+        cm2.dispose();
+      } finally {
+        fs.rmSync(bundledDir, { recursive: true, force: true });
+      }
+    });
+
+    it('v0.14 fresh config: first save seeds turnDone with bundled default', () => {
+      // No audio section at all in the source config — the serializer
+      // should treat this as a never-configured audio block and default
+      // turnDone to the bundled filename.
+      writeConfig({ terminals: {} });
+      const cm2 = makeCm();
+      // Trigger a save by enabling audio.
+      cm2.setAudioEnabled(true);
+      cm2.dispose();
+
+      const raw = fs.readFileSync(path.join(tmpWorkspace, '.claudelike-bar.jsonc'), 'utf-8');
+      expect(raw).toContain('turn-done-default.mp3');
+      cm = undefined as any;
+    });
+
+    it('v0.14 explicit null preserves user intent across save', () => {
+      dropFile('ping.mp3');
+      // User explicitly set turnDone:null because they want silence on
+      // turn-done. The fresh-config default must NOT overwrite this.
+      writeConfig({
+        terminals: {},
+        audio: {
+          enabled: true,
+          sounds: { turnDone: null, midJobPrompt: 'ping.mp3' },
+        },
+      });
+      const cm2 = makeCm();
+      cm2.setAudioEnabled(false);
+      cm2.dispose();
+
+      const raw = fs.readFileSync(path.join(tmpWorkspace, '.claudelike-bar.jsonc'), 'utf-8');
+      const audioMatch = raw.match(/"audio":\s*\{[\s\S]*?^\s*\},$/m);
+      expect(audioMatch).not.toBeNull();
+      const audioBlock = audioMatch![0];
+      // turnDone is explicitly null — not replaced with the bundled default.
+      expect(audioBlock).toMatch(/"turnDone"\s*:\s*null/);
+      expect(audioBlock).not.toContain('turn-done-default.mp3');
+      cm = undefined as any;
+    });
+
     it('v0.14 migration: save drops legacy `ready`/`permission` keys', () => {
       dropFile('chime.mp3');
       dropFile('ping.mp3');

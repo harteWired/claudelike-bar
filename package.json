@@ -119,6 +119,11 @@
         "category": "Claudelike Bar"
       },
       {
+        "command": "claudeDashboard.diagnose",
+        "title": "Diagnose",
+        "category": "Claudelike Bar"
+      },
+      {
         "command": "claudeDashboard.toggleAudio",
         "title": "Toggle Audio",
         "category": "Claudelike Bar"

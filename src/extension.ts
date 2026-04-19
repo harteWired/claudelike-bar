@@ -15,6 +15,7 @@ import { executeRegisterProjectCommand } from './registerProject';
 import { executeLaunchProjectCommand, launchRegisteredProject, cwdExists } from './launchProject';
 import { showOnboardingNotification, isSetupComplete } from './onboarding';
 import { executeRemoveLegacyHooksCommand, maybePromptLegacyHookCleanup } from './legacyHooks';
+import { executeDiagnoseCommand, maybeToastDiagnostics } from './diagnostics';
 import { runSetupWizard } from './wizard';
 import { readExtensionVersion, soundsDir } from './claudePaths';
 import { ensureSoundsDirWithReadme } from './soundsReadme';
@@ -23,6 +24,7 @@ import * as path from 'path';
 const SETUP_PROMPTED_KEY = 'claudelike-bar.setupPrompted';
 const LAST_VERSION_KEY = 'claudelike-bar.lastVersion';
 const LEGACY_HOOKS_PROMPTED_KEY = 'claudelike-bar.legacyHooksPrompted';
+const DIAGNOSTICS_FINGERPRINT_KEY = 'claudelike-bar.diagnosticsFingerprint';
 
 const STATUS_DIR = getStatusDir();
 const DEBUG_FLAG = path.join(STATUS_DIR, '.debug');
@@ -118,6 +120,11 @@ export function activate(context: vscode.ExtensionContext) {
     'claudeDashboard.removeLegacyHooks',
     () => executeRemoveLegacyHooksCommand((m) => log(m)),
   );
+  const bundledSoundsDir = path.join(context.extensionPath, 'media', 'sounds');
+  const diagnoseCmd = vscode.commands.registerCommand(
+    'claudeDashboard.diagnose',
+    () => executeDiagnoseCommand(configManager, bundledSoundsDir, output),
+  );
 
   // Refresh tiles on terminal changes. Declared early so audio commands
   // below can call it. The audioEnabled flag rides along so the webview
@@ -203,6 +210,15 @@ export function activate(context: vscode.ExtensionContext) {
   // Fire-and-forget — never blocks activation.
   maybePromptLegacyHookCleanup(context, LEGACY_HOOKS_PROMPTED_KEY, (m) => log(m))
     .catch((err) => log(`legacy-hooks prompt failed: ${err instanceof Error ? err.message : err}`));
+
+  // v0.14 — activation-time health check. Toasts once when diagnostic state
+  // changes; stays silent when the same issues as last session are still
+  // present (avoids reload-spam). Runs on a short delay so it doesn't
+  // compete with the onboarding notification.
+  setTimeout(() => {
+    maybeToastDiagnostics(context, configManager, bundledSoundsDir, DIAGNOSTICS_FINGERPRINT_KEY, output)
+      .catch((err) => log(`diagnostics toast failed: ${err instanceof Error ? err.message : err}`));
+  }, 1500);
 
   // First-activation onboarding: if hooks aren't installed AND we haven't
   // prompted before, show the install notification. Gate on globalState so
@@ -364,6 +380,7 @@ export function activate(context: vscode.ExtensionContext) {
     setupProjectsCmd,
     showHooksCmd,
     removeLegacyHooksCmd,
+    diagnoseCmd,
     toggleAudioCmd,
     openSoundsFolderCmd,
     firePlayForTestCmd,

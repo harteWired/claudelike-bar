@@ -400,8 +400,8 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
       expect(audio.enabled).toBe(false);
       expect(audio.volume).toBe(0.6);
       expect(audio.debounceMs).toBe(150);
-      expect(audio.sounds.ready).toBeNull();
-      expect(audio.sounds.permission).toBeNull();
+      expect(audio.sounds.turnDone).toBeNull();
+      expect(audio.sounds.midJobPrompt).toBeNull();
     });
 
     it('parses a fully-specified audio section', () => {
@@ -413,15 +413,44 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
           enabled: true,
           volume: 0.3,
           debounceMs: 250,
-          sounds: { ready: 'chime.mp3', permission: 'ping.mp3' },
+          sounds: { turnDone: 'chime.mp3', midJobPrompt: 'ping.mp3' },
         },
       });
       const audio = makeCm().getAudioConfig(soundsDir);
       expect(audio.enabled).toBe(true);
       expect(audio.volume).toBe(0.3);
       expect(audio.debounceMs).toBe(250);
-      expect(audio.sounds.ready).toBe('chime.mp3');
-      expect(audio.sounds.permission).toBe('ping.mp3');
+      expect(audio.sounds.turnDone).toBe('chime.mp3');
+      expect(audio.sounds.midJobPrompt).toBe('ping.mp3');
+    });
+
+    it('v0.14 legacy compat: reads `ready` as turnDone and `permission` as midJobPrompt', () => {
+      dropFile('chime.mp3');
+      dropFile('ping.mp3');
+      writeConfig({
+        terminals: {},
+        audio: {
+          enabled: true,
+          sounds: { ready: 'chime.mp3', permission: 'ping.mp3' },
+        },
+      });
+      const audio = makeCm().getAudioConfig(soundsDir);
+      expect(audio.sounds.turnDone).toBe('chime.mp3');
+      expect(audio.sounds.midJobPrompt).toBe('ping.mp3');
+    });
+
+    it('v0.14 new name wins when both old and new keys are present', () => {
+      dropFile('new.mp3');
+      dropFile('legacy.mp3');
+      writeConfig({
+        terminals: {},
+        audio: {
+          enabled: true,
+          sounds: { turnDone: 'new.mp3', ready: 'legacy.mp3' },
+        },
+      });
+      const audio = makeCm().getAudioConfig(soundsDir);
+      expect(audio.sounds.turnDone).toBe('new.mp3');
     });
 
     it('rejects path-traversal filenames (whitelist regex)', () => {
@@ -429,33 +458,33 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
       // Slashes and leading dots beyond the filename part are rejected.
       writeConfig({
         terminals: {},
-        audio: { enabled: true, sounds: { ready: '../evil.mp3' } },
+        audio: { enabled: true, sounds: { turnDone: '../evil.mp3' } },
       });
       const audio = makeCm().getAudioConfig(soundsDir);
-      expect(audio.sounds.ready).toBeNull();
+      expect(audio.sounds.turnDone).toBeNull();
     });
 
     it('rejects filenames for files that do not exist in the sounds dir', () => {
       writeConfig({
         terminals: {},
-        audio: { enabled: true, sounds: { ready: 'ghost.mp3' } },
+        audio: { enabled: true, sounds: { turnDone: 'ghost.mp3' } },
       });
       const audio = makeCm().getAudioConfig(soundsDir);
-      expect(audio.sounds.ready).toBeNull();
+      expect(audio.sounds.turnDone).toBeNull();
     });
 
-    it('slots fail independently — invalid permission does not disable ready', () => {
+    it('slots fail independently — invalid midJobPrompt does not disable turnDone', () => {
       dropFile('chime.mp3');
       writeConfig({
         terminals: {},
         audio: {
           enabled: true,
-          sounds: { ready: 'chime.mp3', permission: 'missing.mp3' },
+          sounds: { turnDone: 'chime.mp3', midJobPrompt: 'missing.mp3' },
         },
       });
       const audio = makeCm().getAudioConfig(soundsDir);
-      expect(audio.sounds.ready).toBe('chime.mp3');
-      expect(audio.sounds.permission).toBeNull();
+      expect(audio.sounds.turnDone).toBe('chime.mp3');
+      expect(audio.sounds.midJobPrompt).toBeNull();
     });
 
     it('clamps out-of-range volume to default', () => {
@@ -477,7 +506,7 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
         audio: {
           enabled: true,
           customKey: 'experimental-value',
-          sounds: { ready: 'chime.mp3', error: 'oh-no.mp3' },
+          sounds: { turnDone: 'chime.mp3', error: 'oh-no.mp3' },
         },
       });
       const cm2 = makeCm();
@@ -495,17 +524,50 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
       cm = undefined as any;
     });
 
+    it('v0.14 migration: save drops legacy `ready`/`permission` keys', () => {
+      dropFile('chime.mp3');
+      dropFile('ping.mp3');
+      // User still has v0.12-era keys; on first save we rewrite with new names.
+      writeConfig({
+        terminals: {},
+        audio: {
+          enabled: false,
+          sounds: { ready: 'chime.mp3', permission: 'ping.mp3' },
+        },
+      });
+      const cm2 = makeCm();
+      cm2.setAudioEnabled(true);
+      cm2.dispose();
+
+      const raw = fs.readFileSync(path.join(tmpWorkspace, '.claudelike-bar.jsonc'), 'utf-8');
+      // Extract the audio section so we only assert against its keys — the
+      // labels block has its own `ready` key that shouldn't trip us up.
+      const audioMatch = raw.match(/"audio":\s*\{[\s\S]*?^\s*\},$/m);
+      expect(audioMatch, 'audio block not found in serialized config').not.toBeNull();
+      const audioBlock = audioMatch![0];
+      // New names written:
+      expect(audioBlock).toContain('"turnDone"');
+      expect(audioBlock).toContain('"midJobPrompt"');
+      // Filenames preserved through the rename:
+      expect(audioBlock).toContain('chime.mp3');
+      expect(audioBlock).toContain('ping.mp3');
+      // Legacy keys are gone from the audio block.
+      expect(audioBlock).not.toMatch(/"ready"\s*:/);
+      expect(audioBlock).not.toMatch(/"permission"\s*:/);
+      cm = undefined as any;
+    });
+
     it('setAudioEnabled toggles the master switch and preserves sounds', () => {
       dropFile('chime.mp3');
       writeConfig({
         terminals: {},
-        audio: { enabled: false, sounds: { ready: 'chime.mp3' } },
+        audio: { enabled: false, sounds: { turnDone: 'chime.mp3' } },
       });
       const cm2 = makeCm();
       cm2.setAudioEnabled(true);
       const audio = cm2.getAudioConfig(soundsDir);
       expect(audio.enabled).toBe(true);
-      expect(audio.sounds.ready).toBe('chime.mp3');
+      expect(audio.sounds.turnDone).toBe('chime.mp3');
     });
   });
 

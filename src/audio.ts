@@ -3,14 +3,14 @@ import { ConfigManager } from './configManager';
 import { StateTransition, TransitionListener } from './types';
 
 /**
- * v0.12 — AudioPlayer
+ * AudioPlayer
  *
  * Subscribes to `TerminalTracker.onStateChange` and emits `play` messages to
  * the webview whenever a tile transitions *into* `ready` (Claude is blocked
  * on the user). Two optional sound slots:
- *   - `permission` — for mid-job prompts (Notification events)
- *   - `ready`     — for end-of-turn (Stop events), also the fallback when
- *                   `permission` isn't set
+ *   - `midJobPrompt` — for mid-job prompts (Notification events)
+ *   - `turnDone`     — for end-of-turn (Stop events), also the fallback when
+ *                      `midJobPrompt` isn't set
  *
  * Filtering:
  *   - config.audio.enabled === false → drop
@@ -20,7 +20,10 @@ import { StateTransition, TransitionListener } from './types';
  *
  * Debounce: simultaneous transitions on multiple tiles within `debounceMs`
  * coalesce into a single `play` per sound key. Keyed on the resolved filename
- * so `ready` + `permission` can both fire close together without stomping.
+ * so the two slots can fire close together without stomping each other.
+ *
+ * v0.14 renamed the slots from `ready`/`permission`. The config reader
+ * accepts both names; this module only sees the canonical new names.
  */
 export interface AudioPostTarget {
   /** Post a play message to the webview. Implemented by DashboardProvider. */
@@ -69,26 +72,24 @@ export class AudioPlayer implements vscode.Disposable {
       return;
     }
 
-    // Slot selection: Notification → permission (fallback ready), else ready.
-    const isPermission = t.event === 'Notification';
-    const chosen = isPermission && audio.sounds.permission
-      ? audio.sounds.permission
-      : audio.sounds.ready;
+    // Slot selection: Notification → midJobPrompt (fallback turnDone), else turnDone.
+    const isMidJobPrompt = t.event === 'Notification';
+    const chosen = isMidJobPrompt && audio.sounds.midJobPrompt
+      ? audio.sounds.midJobPrompt
+      : audio.sounds.turnDone;
 
     if (!chosen) {
       // Warn-once per slot. Point the user at the slot they'd actually need
-      // to fix: if a Notification fell through to the `ready` slot (because
-      // `permission` wasn't set) and `ready` is missing too, naming
-      // `permission` in the log sends them to the wrong knob.
+      // to fix: if a Notification fell through to `turnDone` (because
+      // `midJobPrompt` wasn't set) and `turnDone` is missing too, naming
+      // `midJobPrompt` in the log sends them to the wrong knob.
       let slotKey: string;
-      if (!audio.sounds.ready && !audio.sounds.permission) {
-        slotKey = 'ready or permission';
-      } else if (isPermission && !audio.sounds.permission) {
-        // Fell back to `ready`, but `ready` is also unset — it's `ready`
-        // that the user needs to configure to get sound here.
-        slotKey = 'ready';
+      if (!audio.sounds.turnDone && !audio.sounds.midJobPrompt) {
+        slotKey = 'turnDone or midJobPrompt';
+      } else if (isMidJobPrompt && !audio.sounds.midJobPrompt) {
+        slotKey = 'turnDone';
       } else {
-        slotKey = isPermission ? 'permission' : 'ready';
+        slotKey = isMidJobPrompt ? 'midJobPrompt' : 'turnDone';
       }
       if (!this.missingWarnings.has(slotKey)) {
         this.missingWarnings.add(slotKey);

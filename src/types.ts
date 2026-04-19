@@ -107,16 +107,25 @@ export interface AudioAck {
 }
 
 /**
- * v0.12 — audio alert config. All fields optional; sensible defaults applied
- * in ConfigManager. Unknown keys are preserved through read-merge-write.
+ * Audio alert config (resolved). Filenames live in ~/.claude/sounds/ or are
+ * bundled defaults (see claudePaths.ts). Sensible defaults applied in
+ * ConfigManager; unknown keys are preserved through read-merge-write.
+ *
+ * Slot names (v0.14):
+ *   - `turnDone`      — Claude finished a turn (Stop → ready)
+ *   - `midJobPrompt`  — Claude is blocked on a user prompt mid-job
+ *                       (Notification → ready). Falls back to `turnDone`.
+ *
+ * v0.14 renamed `ready` → `turnDone` and `permission` → `midJobPrompt`. The
+ * raw on-disk reader still accepts both names (see AudioConfigRaw).
  */
 export interface AudioConfig {
   enabled: boolean;
   volume: number;       // 0.0 – 1.0
   debounceMs: number;
   sounds: {
-    ready?: string | null;       // filename in ~/.claude/sounds/
-    permission?: string | null;  // filename in ~/.claude/sounds/
+    turnDone?: string | null;
+    midJobPrompt?: string | null;
   };
 }
 

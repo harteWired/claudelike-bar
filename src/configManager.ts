@@ -92,14 +92,23 @@ export type SortMode = 'auto' | 'manual';
 /**
  * Raw on-disk shape of the audio section — every field optional, and any
  * unknown keys are preserved through read-merge-write (v0.12).
+ *
+ * v0.14 added `turnDone` / `midJobPrompt` as the canonical slot names. The
+ * v0.12-era `ready` / `permission` are accepted as aliases on read (new
+ * names win when both are set) and dropped from the serialized output on
+ * next save, migrating the file in place without any user action.
  */
 export interface AudioConfigRaw {
   enabled?: boolean;
   volume?: number;
   debounceMs?: number;
   sounds?: {
+    /** @deprecated v0.14 — renamed to `turnDone`. Still read for back-compat. */
     ready?: string | null;
+    /** @deprecated v0.14 — renamed to `midJobPrompt`. Still read for back-compat. */
     permission?: string | null;
+    turnDone?: string | null;
+    midJobPrompt?: string | null;
     [key: string]: unknown;
   };
   [key: string]: unknown;
@@ -354,7 +363,12 @@ export class ConfigManager implements vscode.Disposable {
     const debounceMs = typeof raw.debounceMs === 'number' && raw.debounceMs >= 0
       ? raw.debounceMs
       : DEFAULT_AUDIO_DEBOUNCE_MS;
-    const sounds = (raw.sounds ?? {}) as { ready?: unknown; permission?: unknown };
+    const sounds = (raw.sounds ?? {}) as {
+      ready?: unknown;
+      permission?: unknown;
+      turnDone?: unknown;
+      midJobPrompt?: unknown;
+    };
     const validateSlot = (value: unknown): string | null => {
       if (typeof value !== 'string' || value.length === 0) return null;
       if (!AUDIO_FILENAME_RE.test(value)) return null;
@@ -365,13 +379,18 @@ export class ConfigManager implements vscode.Disposable {
       }
       return value;
     };
+    // v0.14 — new names win, legacy names fall back. A config that still has
+    // `ready`/`permission` keeps working; on next save the serializer drops
+    // the legacy keys and writes new names only.
+    const turnDoneRaw = sounds.turnDone ?? sounds.ready;
+    const midJobPromptRaw = sounds.midJobPrompt ?? sounds.permission;
     const resolved: AudioConfig = {
       enabled: raw.enabled === true,
       volume,
       debounceMs,
       sounds: {
-        ready: validateSlot(sounds.ready),
-        permission: validateSlot(sounds.permission),
+        turnDone: validateSlot(turnDoneRaw),
+        midJobPrompt: validateSlot(midJobPromptRaw),
       },
     };
     if (!soundsDirOverride) {
@@ -662,17 +681,24 @@ export class ConfigManager implements vscode.Disposable {
     // added). Fill the canonical fields with sensible defaults when absent so
     // the written block has a useful shape on first save.
     const rawAudio = (this.config.audio ?? {}) as AudioConfigRaw;
+    // v0.14 — serialize with new slot names only. Legacy `ready`/`permission`
+    // are read back but never written — this migrates configs in place on
+    // first save. New-name wins if both are present in the raw config.
+    const rawSounds = (rawAudio.sounds ?? {}) as Record<string, unknown>;
     const audio: AudioConfigRaw = {
       enabled: rawAudio.enabled === true,
       volume: typeof rawAudio.volume === 'number' ? rawAudio.volume : DEFAULT_AUDIO_VOLUME,
       debounceMs: typeof rawAudio.debounceMs === 'number' ? rawAudio.debounceMs : DEFAULT_AUDIO_DEBOUNCE_MS,
       sounds: {
-        ready: (rawAudio.sounds?.ready as string | null | undefined) ?? null,
-        permission: (rawAudio.sounds?.permission as string | null | undefined) ?? null,
-        // Carry through any unknown slot keys the user added (future states).
+        turnDone: (rawSounds.turnDone as string | null | undefined)
+          ?? (rawSounds.ready as string | null | undefined) ?? null,
+        midJobPrompt: (rawSounds.midJobPrompt as string | null | undefined)
+          ?? (rawSounds.permission as string | null | undefined) ?? null,
+        // Carry through any unknown slot keys (future states). Drop the
+        // canonical + legacy keys so they don't round-trip as duplicates.
         ...Object.fromEntries(
-          Object.entries((rawAudio.sounds ?? {}) as Record<string, unknown>).filter(
-            ([k]) => k !== 'ready' && k !== 'permission',
+          Object.entries(rawSounds).filter(
+            ([k]) => !['ready', 'permission', 'turnDone', 'midJobPrompt'].includes(k),
           ),
         ),
       },
@@ -737,9 +763,12 @@ export class ConfigManager implements vscode.Disposable {
       '  // Add, remove, or edit these \u2014 one is picked at random each time.',
       `  "ignoredTexts": ${indent(JSON.stringify(ignoredTexts, null, 4), 2)},`,
       '',
-      '  // Audio alerts (v0.12). Off by default. Drop sound files into',
-      '  // ~/.claude/sounds/ and reference them by filename. `permission`',
-      '  // falls back to `ready` if unset. See docs/audio-setup.md.',
+      '  // Audio alerts. Off by default. Drop sound files into',
+      '  // ~/.claude/sounds/ and reference them by filename.',
+      '  //   turnDone     — plays when Claude finishes a turn (Stop event)',
+      '  //   midJobPrompt — plays when Claude blocks mid-job on a prompt',
+      '  //                  (Notification). Falls back to turnDone if unset.',
+      '  // Renamed in v0.14 from ready/permission — old names still read.',
       `  "audio": ${indent(JSON.stringify(audio, null, 4), 2)},`,
       '',
       '  // \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510',

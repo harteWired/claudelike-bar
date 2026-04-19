@@ -612,6 +612,14 @@
        REDUCED MOTION — shell pieces only
        Page-specific reveals (.hero__*, etc.) should be handled in
        each page's own reduced-motion block.
+
+       Note: the universal-selector rule below (animation-duration:
+       0.01ms + animation-iteration-count: 1) is the backstop for
+       any future animation on any element — including .grain or
+       other ambient layers that are static today. Explicit
+       animation: none rules below are for elements where the
+       backstop isn't enough (blobs animate infinitely; even one
+       instant pass is more than we want).
        ============================================================ */
     @media (prefers-reduced-motion: reduce) {
       *,

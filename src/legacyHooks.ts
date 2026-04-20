@@ -24,7 +24,11 @@ const LEGACY_SCRIPTS = ['notify.sh', 'notify-silent.sh'];
 
 function referencesLegacyScript(cmd: unknown): boolean {
   if (typeof cmd !== 'string') return false;
-  return LEGACY_SCRIPTS.some((name) => cmd.includes(`/hooks/${name}`));
+  // Accept either path separator so Windows-format commands
+  // (`C:\Users\…\hooks\notify.sh`) match the same as POSIX.
+  return LEGACY_SCRIPTS.some((name) =>
+    cmd.includes(`/hooks/${name}`) || cmd.includes(`\\hooks\\${name}`),
+  );
 }
 
 export interface LegacyHookDetection {

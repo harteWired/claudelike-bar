@@ -1,0 +1,55 @@
+<svg viewBox="0 0 512 512" width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <clipPath id="card">
+      <rect x="36" y="36" width="440" height="440" rx="80" ry="80"/>
+    </clipPath>
+    <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6e549a"/>
+      <stop offset="100%" stop-color="#523b7c"/>
+    </linearGradient>
+    <linearGradient id="amberGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ecb37a"/>
+      <stop offset="100%" stop-color="#dc954f"/>
+    </linearGradient>
+    <linearGradient id="tealGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7adcc0"/>
+      <stop offset="100%" stop-color="#5cc1a4"/>
+    </linearGradient>
+    <radialGradient id="dotShine" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.30)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Soft drop shadow -->
+  <rect x="36" y="46" width="440" height="440" rx="80" ry="80" fill="#000" opacity="0.45"/>
+
+  <g clip-path="url(#card)">
+    <!-- Top stripe: deep purple -->
+    <rect x="36" y="36" width="440" height="147" fill="url(#purpleGrad)"/>
+    <!-- Middle stripe: amber -->
+    <rect x="36" y="183" width="440" height="146" fill="url(#amberGrad)"/>
+    <!-- Bottom stripe: teal -->
+    <rect x="36" y="329" width="440" height="147" fill="url(#tealGrad)"/>
+
+    <!-- Subtle horizontal hairlines -->
+    <line x1="36" y1="183" x2="476" y2="183" stroke="rgba(15,15,25,0.18)" stroke-width="1.5"/>
+    <line x1="36" y1="329" x2="476" y2="329" stroke="rgba(15,15,25,0.18)" stroke-width="1.5"/>
+
+    <!-- Status dots — editorial palette only, picked for contrast -->
+    <!-- Top dot: cream on dark purple (max lightness contrast) -->
+    <circle cx="125" cy="109" r="28" fill="#f5efe0"/>
+    <circle cx="125" cy="109" r="28" fill="url(#dotShine)"/>
+
+    <!-- Middle dot: deep purple on amber (mirrors top stripe; dark-on-warm) -->
+    <circle cx="125" cy="256" r="28" fill="#523b7c"/>
+    <circle cx="125" cy="256" r="28" fill="url(#dotShine)"/>
+
+    <!-- Bottom dot: amber on teal (complementary warm-on-cool) -->
+    <circle cx="125" cy="402" r="28" fill="#e6a562"/>
+    <circle cx="125" cy="402" r="28" fill="url(#dotShine)"/>
+  </g>
+
+  <!-- Inner edge highlight -->
+  <rect x="36" y="36" width="440" height="440" rx="80" ry="80" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+</svg>

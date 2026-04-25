@@ -6,6 +6,19 @@
   <title>Claudelike Bar — Live status tiles for every Claude Code terminal</title>
   <meta name="description" content="A VS Code sidebar that shows what every Claude Code terminal is doing at a glance. Live status tiles, drag to reorder, context-window tracking, configure by talking to Claude.">
 
+  <link rel="icon" type="image/png" href="media/icon.png">
+  <link rel="apple-touch-icon" href="media/icon.png">
+
+  <meta property="og:title" content="Claudelike Bar — Live status tiles for every Claude Code terminal">
+  <meta property="og:description" content="A VS Code sidebar that shows what every Claude Code terminal is doing at a glance. Live status tiles, drag to reorder, context-window tracking, configure by talking to Claude.">
+  <meta property="og:image" content="https://aes87.github.io/claudelike-bar/media/icon.png">
+  <meta property="og:url" content="https://aes87.github.io/claudelike-bar/">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Claudelike Bar — Live status tiles for every Claude Code terminal">
+  <meta name="twitter:description" content="A VS Code sidebar that shows what every Claude Code terminal is doing at a glance.">
+  <meta name="twitter:image" content="https://aes87.github.io/claudelike-bar/media/icon.png">
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
@@ -663,6 +676,33 @@
       align-items: center;
     }
     .hero__text { max-width: 36rem; }
+    .hero__app-icon {
+      display: block;
+      width: 88px;
+      height: 88px;
+      margin-bottom: var(--space-md);
+      border-radius: 22%;
+      filter: drop-shadow(0 12px 32px oklch(0.55 0.18 340 / 0.35))
+              drop-shadow(0 4px 8px oklch(0 0 0 / 0.4));
+      transition: transform var(--duration-hover) var(--ease-dramatic),
+                  filter var(--duration-hover) var(--ease-standard);
+      opacity: 0;
+    }
+
+    .hero__app-icon:hover {
+      transform: translateY(-2px) scale(1.04);
+      filter: drop-shadow(0 16px 40px oklch(0.55 0.18 340 / 0.45))
+              drop-shadow(0 6px 12px oklch(0 0 0 / 0.5));
+    }
+
+    @media (max-width: 768px) {
+      .hero__app-icon {
+        margin-inline: auto;
+        width: 72px;
+        height: 72px;
+      }
+    }
+
     .hero__overline {
       font-family: var(--font-mono); font-size: var(--text-sm);
       color: var(--color-accent-primary); text-transform: uppercase;
@@ -1188,7 +1228,8 @@
     <section class="hero" aria-label="Hero">
       <div class="hero__content">
         <div class="hero__text">
-          <p class="hero__overline">VS Code Extension <span class="version">v0.15.3</span></p>
+          <img class="hero__app-icon" src="media/icon.png" alt="Claudelike Bar app icon — three horizontal stripes (cyan, teal, pink) with status dots, in a rounded square" width="88" height="88">
+          <p class="hero__overline">VS Code Extension <span class="version">v0.15.4</span></p>
           <h1 class="hero__headline" data-split="words">Live status tiles for every <em>Claude Code</em> terminal.</h1>
           <p class="hero__subhead">A sidebar that shows what every Claude is doing at a glance — animated dots, color-coded borders, drag-to-reorder, context-window tracking, and a passive-aggressive mode that guilt-trips you when you ignore it.</p>
           <div class="hero__cta">
@@ -1467,7 +1508,7 @@
               <li><strong>Marketplace listing</strong> — <code>marketplace.visualstudio.com/items?itemName=aes87.claudelike-bar</code>.</li>
               <li><strong>Legacy hook detection on Windows</strong> (v0.15.1) — <code>referencesLegacyScript</code> accepts both path separators, so Windows users with <code>notify.sh</code> / <code>notify-silent.sh</code> entries now get the cleanup toast that POSIX users have had since v0.14. Plus a test-only fix (<code>USERPROFILE</code> alongside <code>HOME</code>) that turned Windows CI green for the first time since v0.14.</li>
               <li><strong>Marketplace icon</strong> (v0.15.2) — purpose-built logo: rounded square with three full-bleed status stripes (cyan / teal / magenta) and contrasting status dots aligned on the left, transparent background so it sits clean on light marketplace cards and dark VS Code chrome alike.</li>
-              <li><strong>Activity-bar icon refresh</strong> (v0.15.3) — sidebar glyph now mirrors the new logo: rounded outline, three horizontal divisions, three dots on the left. Replaces the generic 2×2 dashboard placeholder for visual consistency between the marketplace card and the day-to-day sidebar icon.</li>
+              <li><strong>Activity-bar icon refresh</strong> (v0.15.4) — sidebar glyph now mirrors the new logo: rounded outline, three horizontal divisions, three dots on the left. Replaces the generic 2×2 dashboard placeholder for visual consistency between the marketplace card and the day-to-day sidebar icon.</li>
             </ul>
           </li>
 
@@ -1621,7 +1662,7 @@
     var prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (prefersReducedMotion) {
-      document.querySelectorAll('.hero__overline, .hero__subhead, .hero__cta, .hero__scroll-indicator, .hero__demo').forEach(function (el) {
+      document.querySelectorAll('.hero__app-icon, .hero__overline, .hero__subhead, .hero__cta, .hero__scroll-indicator, .hero__demo').forEach(function (el) {
         el.style.opacity = '1';
       });
       return;
@@ -1672,6 +1713,7 @@
 
     function initHero() {
       var headline = document.querySelector('.hero__headline');
+      var appIcon = document.querySelector('.hero__app-icon');
       var overline = document.querySelector('.hero__overline');
       var subhead = document.querySelector('.hero__subhead');
       var cta = document.querySelector('.hero__cta');
@@ -1683,12 +1725,14 @@
         var split = new SplitText(headline, {
           type: 'words', wordsClass: 'hero__word', mask: true, aria: true
         });
+        if (appIcon) gsap.set(appIcon, { y: 20, scale: 0.85 });
         gsap.set(overline, { y: 20 });
         gsap.set(subhead, { y: 20 });
         gsap.set(cta, { y: 20 });
         if (demo) gsap.set(demo, { y: 40, scale: 0.97 });
 
         var tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+        if (appIcon) tl.to(appIcon, { opacity: 1, y: 0, scale: 1, duration: 0.7, ease: 'back.out(1.4)' }, 0.05);
         tl.to(overline, { opacity: 1, y: 0, duration: 0.6 }, 0.2);
         tl.from(split.words, { y: '100%', duration: 0.9, stagger: 0.07 }, 0.4);
         if (demo) tl.to(demo, { opacity: 1, y: 0, scale: 1, duration: 1.0, ease: 'power2.out' }, 0.6);

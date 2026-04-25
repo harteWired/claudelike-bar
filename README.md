@@ -1,8 +1,14 @@
+<div align="center">
+
+<img src="media/icon.png" alt="Claudelike Bar logo — three horizontal stripes (cyan, teal, pink) with status dots, in a rounded square" width="128" height="128">
+
 # claudelike-bar
 
 [![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/aes87.claudelike-bar?label=Marketplace&color=1e1e2e)](https://marketplace.visualstudio.com/items?itemName=aes87.claudelike-bar)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/aes87/claudelike-bar?label=Open%20VSX&color=1e1e2e)](https://open-vsx.org/extension/aes87/claudelike-bar)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+</div>
 
 **What would you do for a Claudelike Bar?**
 

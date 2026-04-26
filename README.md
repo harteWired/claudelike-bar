@@ -1,11 +1,10 @@
 <div align="center">
 
-<img src="media/icon.png" alt="Claudelike Bar logo — three horizontal stripes (cyan, teal, pink) with status dots, in a rounded square" width="128" height="128">
+<img src="media/icon.png" alt="Claudelike Bar logo — three horizontal stripes (deep purple, amber, teal) with cream, purple, and amber status dots, in a rounded square" width="128" height="128">
 
 # claudelike-bar
 
-[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/aes87.claudelike-bar?label=Marketplace&color=1e1e2e)](https://marketplace.visualstudio.com/items?itemName=aes87.claudelike-bar)
-[![Open VSX Version](https://img.shields.io/open-vsx/v/aes87/claudelike-bar?label=Open%20VSX&color=1e1e2e)](https://open-vsx.org/extension/aes87/claudelike-bar)
+[![Open VSX Version](https://img.shields.io/open-vsx/v/harteWired/claudelike-bar?label=Open%20VSX&color=1e1e2e)](https://open-vsx.org/extension/harteWired/claudelike-bar)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 </div>
@@ -32,10 +31,9 @@ A VS Code sidebar that shows you — at a glance — what every Claude Code term
 
 ## Install
 
-Pick whichever gallery your editor uses:
+> **VS Code Marketplace:** temporarily unavailable — waiting for Microsoft. Use Open VSX in the meantime.
 
-- **[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=aes87.claudelike-bar)** — vanilla VS Code (`ext install aes87.claudelike-bar` or the Extensions sidebar).
-- **[Open VSX](https://open-vsx.org/extension/aes87/claudelike-bar)** — VSCodium, Cursor, and most Dev Containers / Codespaces setups.
+- **[Open VSX](https://open-vsx.org/extension/harteWired/claudelike-bar)** — VSCodium, Cursor, most Dev Containers / Codespaces, and vanilla VS Code (via `code --install-extension https://open-vsx.org/api/harteWired/claudelike-bar/latest/file/harteWired.claudelike-bar-latest.vsix`).
 
 After install:
 

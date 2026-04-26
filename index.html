@@ -1229,7 +1229,7 @@
       <div class="hero__content">
         <div class="hero__text">
           <img class="hero__app-icon" src="media/icon.png" alt="Claudelike Bar app icon — three horizontal stripes (cyan, teal, pink) with status dots, in a rounded square" width="88" height="88">
-          <p class="hero__overline">VS Code Extension <span class="version">v0.15.5</span></p>
+          <p class="hero__overline">VS Code Extension <span class="version">v0.16.0</span></p>
           <h1 class="hero__headline" data-split="words">Live status tiles for every <em>Claude Code</em> terminal.</h1>
           <p class="hero__subhead">A sidebar that shows what every Claude is doing at a glance — animated dots, color-coded borders, drag-to-reorder, context-window tracking, and a passive-aggressive mode that guilt-trips you when you ignore it.</p>
           <div class="hero__cta">
@@ -1511,6 +1511,15 @@
               <li><strong>Activity-bar icon refresh</strong> (v0.15.3) — sidebar glyph now mirrors the new logo: rounded outline, three horizontal divisions, three dots on the left. Replaces the generic 2×2 dashboard placeholder for visual consistency between the marketplace card and the day-to-day sidebar icon.</li>
               <li><strong>Editorial-palette icon re-skin</strong> (v0.15.4) — marketplace icon and GH Pages identity now share a coherent editorial palette (deep purple, amber, teal) instead of the cyan/teal/pink first cut. Adds an icon to the hero, favicon + apple-touch-icon, and OG/Twitter meta image for social shares.</li>
               <li><strong>Subagent permission tiles float to the top</strong> (v0.15.5, #23) — when a subagent fires <code>permission_prompt</code> mid-job, the tile now projects to <code>ready</code> for render + sort: amber attention dot instead of green pulse, and floats above plain working tiles in auto sort. The state machine still tracks <code>working</code> internally so transitions and the subagent counter are unaffected.</li>
+            </ul>
+          </li>
+
+          <li class="changelog__entry">
+            <div class="changelog__marker"><span>0.16</span></div>
+            <h3>Plain shells in the bar <span class="version-tag">Apr 26 · Day 23</span></h3>
+            <p>The bar now hosts non-Claude terminals alongside your Claude tiles, opt-in via a single config flag.</p>
+            <ul>
+              <li><strong>Plain shell tiles</strong> (#25) — set <code>"type": "shell"</code> on a terminal entry in <code>~/.claude/claudelike-bar.jsonc</code> and the bar renders it as a gray pill with no state machine, no animated dot, no Claude-specific menu items. Click to focus. Status JSONs are ignored if they happen to match the slug — your config opt-out is authoritative. Auto-sort puts shell tiles between idle Claude tiles and offline ones; manual mode obeys <code>order</code> like everything else. Live config flips (claude ↔ shell) work without a reload.</li>
             </ul>
           </li>
 

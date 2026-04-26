@@ -195,6 +195,19 @@ body {
   opacity: 0.55;
 }
 
+/* v0.16.0 (#25) — plain non-Claude shell tile. Gray pill, no animation.
+   Reads as "this terminal exists, click to focus, nothing to track" —
+   visually subordinate to active Claude tiles but not as faded as offline
+   (the user opted in to having it here, it's not a stub). */
+.dot.shell {
+  background: var(--vscode-descriptionForeground);
+  opacity: 0.6;
+}
+
+.tile.status-shell {
+  opacity: 0.85;
+}
+
 .dot.ignored {
   background: var(--vscode-terminal-ansiRed);
   opacity: 0.7;

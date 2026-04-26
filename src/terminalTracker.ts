@@ -108,14 +108,21 @@ export class TerminalTracker implements vscode.Disposable {
     const cfg = this.configManager.getTerminal(name);
     const thresholds = this.configManager.getContextThresholds();
 
+    // v0.16.0 (#25) — `type: "shell"` means a plain non-Claude terminal.
+    // The tile sits in the bar without a state machine: status is fixed
+    // at `shell` and never transitions, so the user gets a gray pill
+    // they can click to focus the terminal alongside their Claude tiles.
+    const isShell = cfg?.type === 'shell';
+    const initialStatus: SessionStatus = isShell ? 'shell' : 'idle';
+
     const id = this.assignId(terminal);
     this.terminalRefs.set(id, terminal);
     this.terminals.set(id, {
       id,
       name,
       displayName: cfg?.nickname || name,
-      status: 'idle',
-      statusLabel: this.configManager.getLabel('idle'),
+      status: initialStatus,
+      statusLabel: this.configManager.getLabel(initialStatus),
       lastActivity: Date.now(),
       isActive: vscode.window.activeTerminal === terminal,
       themeColor: getThemeColor(name, cfg?.color),
@@ -128,6 +135,7 @@ export class TerminalTracker implements vscode.Disposable {
       compacting: false,
       subagentPermissionPending: false,
       pinned: cfg?.pinned === true,
+      type: isShell ? 'shell' : 'claude',
     });
   }
 
@@ -269,7 +277,7 @@ export class TerminalTracker implements vscode.Disposable {
     }
   }
 
-  /** Re-apply config (colors, nicknames, icons, thresholds, pinned) to all tracked tiles. */
+  /** Re-apply config (colors, nicknames, icons, thresholds, pinned, type) to all tracked tiles. */
   refreshFromConfig(): void {
     const thresholds = this.configManager.getContextThresholds();
     for (const [, tile] of this.terminals) {
@@ -280,6 +288,28 @@ export class TerminalTracker implements vscode.Disposable {
       tile.contextWarn = thresholds.warn;
       tile.contextCrit = thresholds.crit;
       tile.pinned = cfg?.pinned === true;
+      // v0.16.0 (#25) — type can be flipped live via config edit. When a
+      // tile becomes a shell, snap status to 'shell' and clear the
+      // claude-side transient flags (counter, error type, etc) so any
+      // stale state from a prior claude life doesn't bleed through. The
+      // reverse direction (shell → claude) resets to idle and lets the
+      // state machine take over from there.
+      const wasShell = tile.type === 'shell';
+      const isShell = cfg?.type === 'shell';
+      tile.type = isShell ? 'shell' : 'claude';
+      if (isShell && !wasShell) {
+        tile.status = 'shell';
+        tile.pendingSubagents = 0;
+        tile.teammateIdle = false;
+        tile.errorType = undefined;
+        tile.toolError = false;
+        tile.compacting = false;
+        tile.subagentPermissionPending = false;
+        tile.ignoredText = undefined;
+        this.clearReadyTimer(tile.id);
+      } else if (!isShell && wasShell) {
+        tile.status = 'idle';
+      }
       // Refresh status label — recompose v0.9 / v0.9.1 / v0.9.3 rich labels
       // from current flags. Skip `ignored` (uses custom passive-aggressive text).
       if (tile.status === 'ignored') {
@@ -439,6 +469,16 @@ export class TerminalTracker implements vscode.Disposable {
   ): void {
     const tile = this.findMatchingTile(projectName);
     if (tile) {
+      // v0.16.0 (#25) — shell tiles are explicitly opted out of the state
+      // machine. A status JSON arriving for one (e.g. user dropped a
+      // CLAUDELIKE_BAR_NAME envvar matching this slug into a shell that
+      // wasn't supposed to be tracked) is ignored — the user's `type:
+      // "shell"` declaration is authoritative. Logged so drift is
+      // diagnosable but never silently overrides their config.
+      if (tile.type === 'shell') {
+        this.log(() => `shell tile ${tile.name}: ignoring status update (status=${status}, event=${event ?? '-'})`);
+        return;
+      }
       const prev = tile.status;
       let changed = false;
 
@@ -956,7 +996,11 @@ export class TerminalTracker implements vscode.Disposable {
       // error floats to the top (above waiting) — errors demand attention more
       // than a tile that's just been waiting a while.
       // offline sits below idle — Claude isn't running, nothing actionable.
-      const statusOrder: Record<string, number> = { error: 0, waiting: 1, ignored: 2, ready: 3, working: 4, done: 5, idle: 6, offline: 7 };
+      // v0.16.0 (#25) — `shell` tiles are passive (no state, no urgency)
+      // so they sit between `idle` (live but quiet Claude) and `offline`
+      // (Claude was running, isn't now). Reads as "this terminal exists
+      // and you can click it but nothing is happening here."
+      const statusOrder: Record<string, number> = { error: 0, waiting: 1, ignored: 2, ready: 3, working: 4, done: 5, idle: 6, shell: 7, offline: 8 };
       unpinned.sort((a, b) => {
         const orderDiff = (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
         if (orderDiff !== 0) return orderDiff;
@@ -1019,6 +1063,12 @@ export class TerminalTracker implements vscode.Disposable {
     for (const [slug, cfg] of Object.entries(all)) {
       if (realNames.has(slug)) continue;
       if (cfg.hidden === true) continue;
+      // v0.16.0 (#25) — shell entries don't get a registered/launch tile.
+      // The whole point of `type: "shell"` is "this is a plain terminal,
+      // nothing special" — surfacing it as a dim "click to launch" tile
+      // when its terminal is closed contradicts that intent. A user who
+      // wants their shell back can spawn it via the VS Code terminal UI.
+      if (cfg.type === 'shell') continue;
       // v0.15.0 (#20) — a slug with a fresh non-idle status file is running
       // somewhere; the tracker just hasn't associated a VS Code terminal
       // with it (common cause: CLAUDELIKE_BAR_NAME env var routes the hook

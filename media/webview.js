@@ -169,6 +169,7 @@ function patchTile(el, tile) {
   el.classList.toggle('status-error', tile.status === 'error');
   el.classList.toggle('status-offline', tile.status === 'offline');
   el.classList.toggle('status-registered', tile.status === 'registered');
+  el.classList.toggle('status-shell', tile.status === 'shell');
 
   // Theme color
   el.style.setProperty('--tile-color', tile.themeColor);
@@ -265,6 +266,7 @@ function createTileEl(tile, index) {
     : tile.status === 'error' ? ' status-error'
     : tile.status === 'offline' ? ' status-offline'
     : tile.status === 'registered' ? ' status-registered'
+    : tile.status === 'shell' ? ' status-shell'
     : '';
   el.className = `tile entering${tile.isActive ? ' active' : ''}${tileStatusClass}`;
   el.style.setProperty('--tile-color', tile.themeColor);
@@ -444,6 +446,7 @@ function showContextMenu(e, tileId) {
 
   const tile = currentTiles.find((t) => t.id === tileId);
   const isRegistered = tile?.status === 'registered';
+  const isShell = tile?.status === 'shell';
 
   const menu = document.createElement('div');
   menu.className = 'context-menu';
@@ -462,11 +465,17 @@ function showContextMenu(e, tileId) {
     return;
   }
 
-  // Mark as done — silences judgement for inactive terminals
-  const doneItem = menuItem('\u2713', 'Mark as done', () => {
-    vscode.postMessage({ type: 'markDone', id: tileId });
-  });
-  menu.appendChild(doneItem);
+  // v0.16.0 (#25) — shell tiles skip Claude-specific items (Mark as done,
+  // Mute Audio, Launch project). Pin / Color / Clone / Kill / Switch to
+  // auto sort all still apply because they manage the bar and the VS
+  // Code terminal, not Claude state.
+  if (!isShell) {
+    // Mark as done — silences judgement for inactive terminals
+    const doneItem = menuItem('\u2713', 'Mark as done', () => {
+      vscode.postMessage({ type: 'markDone', id: tileId });
+    });
+    menu.appendChild(doneItem);
+  }
 
   // v0.13.4 (#4) — Pin / Unpin. Pinned tiles live in a fixed-position
   // zone at the bottom of the bar regardless of sortMode. Label flips
@@ -480,23 +489,24 @@ function showContextMenu(e, tileId) {
   });
   menu.appendChild(pinItem);
 
-  // v0.12 — Mute / Unmute audio. Label flips based on current state so the
-  // user always sees the action they're about to take. Posts `toggleAudio`
-  // (not tied to a specific tile; the command is global).
-  const audioIcon = audioEnabled ? '\uD83D\uDD07' : '\uD83D\uDD0A'; // 🔇 / 🔊
-  const audioLabel = audioEnabled ? 'Mute Audio' : 'Unmute Audio';
-  const audioItem = menuItem(audioIcon, audioLabel, () => {
-    vscode.postMessage({ type: 'toggleAudio' });
-  });
-  menu.appendChild(audioItem);
+  // v0.12 — Mute / Unmute audio + Launch another project. Both are
+  // Claude-workflow items — skip them on shell tiles.
+  if (!isShell) {
+    const audioIcon = audioEnabled ? '\uD83D\uDD07' : '\uD83D\uDD0A'; // 🔇 / 🔊
+    const audioLabel = audioEnabled ? 'Mute Audio' : 'Unmute Audio';
+    const audioItem = menuItem(audioIcon, audioLabel, () => {
+      vscode.postMessage({ type: 'toggleAudio' });
+    });
+    menu.appendChild(audioItem);
 
-  // v0.13 — launch another registered project. Workflow action (not
-  // per-tile state), so it sits below Mute/Unmute and above the
-  // separator before Clone Terminal.
-  const launchItem = menuItem('\uD83D\uDE80', 'Launch another project…', () => {
-    vscode.postMessage({ type: 'launchProject' });
-  });
-  menu.appendChild(launchItem);
+    // v0.13 — launch another registered project. Workflow action (not
+    // per-tile state), so it sits below Mute/Unmute and above the
+    // separator before Clone Terminal.
+    const launchItem = menuItem('\uD83D\uDE80', 'Launch another project…', () => {
+      vscode.postMessage({ type: 'launchProject' });
+    });
+    menu.appendChild(launchItem);
+  }
 
   // v0.13.1 — "Switch to auto sort" only appears when we're in manual
   // mode. In auto mode the option is a no-op, so we omit it rather than

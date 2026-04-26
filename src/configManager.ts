@@ -66,6 +66,15 @@ export interface TerminalConfig {
    * always appears regardless.
    */
   hidden?: boolean;
+  /**
+   * v0.16.0 (#25) — terminal kind. `"claude"` (default when unset) engages
+   * the full state machine — hooks, status JSONs, animated dots, all the
+   * working/ready/waiting transitions. `"shell"` is a plain non-Claude
+   * terminal that lives in the bar without any of that — gray pill, no
+   * status, click to focus. Use for ad-hoc shells you want reachable from
+   * the bar alongside Claude tiles.
+   */
+  type?: 'claude' | 'shell';
 }
 
 /**
@@ -160,6 +169,9 @@ const DEFAULT_LABELS: Record<string, string> = {
   subagent_permission: 'Subagent needs permission',
   // v0.13.4 (#15) — registered but not yet running. Click the dim tile to launch.
   registered: 'Click to launch',
+  // v0.16.0 (#25) — plain non-Claude shell tile. Empty string = no status
+  // text rendered; the tile shows just the displayName and a gray pill.
+  shell: '',
 };
 
 const DEFAULT_IGNORED_TEXTS = [
@@ -303,16 +315,9 @@ export class ConfigManager implements vscode.Disposable {
     const pattern = new vscode.RelativePattern(vscode.Uri.file(dir), filename);
     this.watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
-    const reload = () => {
-      if (this.isSaving) return; // skip reload from our own write
-      this.loadFrom(this.configPath);
-      this.mergedLabels = { ...DEFAULT_LABELS, ...this.config.labels };
-      this.onChangeEmitter.fire();
-    };
-
     this.disposables.push(
-      this.watcher.onDidChange(reload),
-      this.watcher.onDidCreate(reload),
+      this.watcher.onDidChange(() => this.reload()),
+      this.watcher.onDidCreate(() => this.reload()),
       this.watcher.onDidDelete(() => {
         if (this.isSaving) return;
         this.config = { terminals: {} };
@@ -321,6 +326,19 @@ export class ConfigManager implements vscode.Disposable {
       }),
       this.watcher,
     );
+  }
+
+  /**
+   * Re-read the config file from disk. Public so callers (and tests) can
+   * force a refresh independent of the file-system watcher — the watcher
+   * doesn't fire reliably across all platforms (Windows debounce, mocked
+   * fs in tests).
+   */
+  reload(): void {
+    if (this.isSaving) return; // skip reload from our own write
+    this.loadFrom(this.configPath);
+    this.mergedLabels = { ...DEFAULT_LABELS, ...this.config.labels };
+    this.onChangeEmitter.fire();
   }
 
   getConfigPath(): string {

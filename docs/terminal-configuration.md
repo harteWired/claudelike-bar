@@ -16,6 +16,7 @@ All settings live in `~/.claude/claudelike-bar.jsonc`. Auto-created when you fir
 | `order` | number | *unset* | Manual sort position (set by drag-and-drop). Only used when top-level `sortMode` is `"manual"`. |
 | `shellPath` | string \| null | *unset* | Path to a specific shell binary. Use when you need git-bash on Windows for legacy commands: `"C:\\Program Files\\Git\\bin\\bash.exe"`. |
 | `hidden` | boolean | `false` | Hide this entry from the offline-tiles zone. The terminal still auto-starts if `autoStart: true`. |
+| `type` | `"claude"` \| `"shell"` | `"claude"` | `"shell"` makes this a plain non-Claude tile — gray pill, no animated dot, no state machine, no Claude-specific menu items. Click to focus. Use for ad-hoc shells you want reachable from the bar. Status JSONs that match the slug are ignored (config opt-out is authoritative). |
 
 ## Sorting tiles
 

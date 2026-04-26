@@ -402,6 +402,129 @@ describe('TerminalTracker.addTerminal — clone suffix (#17)', () => {
   });
 });
 
+describe('TerminalTracker — shell tiles (#25)', () => {
+  it('renders shell config entries with status="shell" instead of "idle"', () => {
+    writeConfig({
+      terminals: {
+        'my-shell': { color: 'white', icon: null, nickname: null, autoStart: false, type: 'shell' as any },
+        'my-claude': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    addMockTerminal('my-shell');
+    addMockTerminal('my-claude');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const tiles = tracker.getTiles();
+    expect(tiles.find((t) => t.name === 'my-shell')?.status).toBe('shell');
+    expect(tiles.find((t) => t.name === 'my-shell')?.type).toBe('shell');
+    expect(tiles.find((t) => t.name === 'my-claude')?.status).toBe('idle');
+    expect(tiles.find((t) => t.name === 'my-claude')?.type).toBe('claude');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('updateStatus is a no-op for shell tiles (config opt-out is authoritative)', () => {
+    writeConfig({
+      terminals: {
+        'my-shell': { color: 'white', icon: null, nickname: null, autoStart: false, type: 'shell' as any },
+      },
+    });
+    addMockTerminal('my-shell');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    // Status JSON arriving for a shell tile (e.g. user accidentally set
+    // CLAUDELIKE_BAR_NAME) must not flip it to working — config opt-out wins.
+    tracker.updateStatus('my-shell', 'working', 'PreToolUse');
+    tracker.updateStatus('my-shell', 'ready', 'Stop');
+
+    expect(tracker.getTiles().find((t) => t.name === 'my-shell')?.status).toBe('shell');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('shell tiles sort below idle Claude tiles in auto mode', () => {
+    writeConfig({
+      sortMode: 'auto',
+      terminals: {
+        'shell-a': { color: 'white', icon: null, nickname: null, autoStart: false, type: 'shell' as any },
+        'idle-claude': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    addMockTerminal('shell-a');
+    addMockTerminal('idle-claude');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const order = tracker.getTiles().map((t) => t.name);
+    expect(order.indexOf('idle-claude')).toBeLessThan(order.indexOf('shell-a'));
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('shell tiles do NOT get a registered/launch tile when their terminal is closed', () => {
+    writeConfig({
+      terminals: {
+        'absent-shell': { color: 'white', icon: null, nickname: null, autoStart: false, type: 'shell' as any },
+        'absent-claude': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    // Neither terminal is open. Synthesis should produce a launch tile for
+    // the Claude one but NOT the shell one.
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const names = tracker.getTiles().map((t) => t.name);
+    expect(names).toContain('absent-claude');
+    expect(names).not.toContain('absent-shell');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('refreshFromConfig flips shell ↔ claude live (config edit + reload)', () => {
+    writeConfig({
+      terminals: {
+        'flippy': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    addMockTerminal('flippy');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(tracker.getTiles().find((t) => t.name === 'flippy')?.status).toBe('idle');
+
+    // User edits config: claude → shell.
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify({
+      terminals: {
+        'flippy': { color: 'cyan', icon: null, nickname: null, autoStart: false, type: 'shell' },
+      },
+    }));
+    cm.reload();
+    tracker.refreshFromConfig();
+    expect(tracker.getTiles().find((t) => t.name === 'flippy')?.status).toBe('shell');
+    expect(tracker.getTiles().find((t) => t.name === 'flippy')?.type).toBe('shell');
+
+    // And back: shell → claude.
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify({
+      terminals: {
+        'flippy': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    }));
+    cm.reload();
+    tracker.refreshFromConfig();
+    expect(tracker.getTiles().find((t) => t.name === 'flippy')?.status).toBe('idle');
+    expect(tracker.getTiles().find((t) => t.name === 'flippy')?.type).toBe('claude');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+});
+
 describe('TerminalTracker.setPinned', () => {
   it('flips the tile flag and persists to config', () => {
     writeConfig({ terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });

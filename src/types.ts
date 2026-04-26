@@ -1,4 +1,4 @@
-export type SessionStatus = 'idle' | 'working' | 'ready' | 'waiting' | 'done' | 'ignored' | 'error' | 'offline' | 'registered';
+export type SessionStatus = 'idle' | 'working' | 'ready' | 'waiting' | 'done' | 'ignored' | 'error' | 'offline' | 'registered' | 'shell';
 
 /**
  * Raw status signals written by the hook script (not internal tile states).
@@ -60,6 +60,11 @@ export interface TileData {
   // of the bar regardless of sortMode. The webview uses this flag to
   // decorate the first pinned tile with a divider above it.
   pinned?: boolean;
+  // v0.16.0 (#25) — plain (non-Claude) shell tile. No state machine, no
+  // animated dot, gray fill, no Claude-specific menu items. Click still
+  // focuses the terminal. Set via `type: "shell"` in claudelike-bar.jsonc.
+  // Default (unset) = Claude tile, full state machine engaged.
+  type?: 'claude' | 'shell';
 }
 
 /**

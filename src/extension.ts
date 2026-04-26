@@ -170,6 +170,66 @@ export function activate(context: vscode.ExtensionContext) {
     },
   );
 
+  // v0.16.5 (#18) — focus a tile by its position in the current sort
+  // (1-indexed slots, 9 max — VS Code keybinding chords commonly use
+  // ctrl+alt+1..9). Skips registered tiles since they have no underlying
+  // VS Code terminal to focus. Soft no-op + toast when the slot is empty.
+  function focusTileBySlot(slot: number): void {
+    const live = tracker.getTiles().filter((t) => t.status !== 'registered');
+    const tile = live[slot - 1];
+    if (!tile) {
+      vscode.window.showInformationMessage(
+        `Claudelike Bar: no tile in slot ${slot} (${live.length} tile${live.length === 1 ? '' : 's'} currently in the bar).`,
+      );
+      log(`focusSlot${slot}: no tile (live count=${live.length})`);
+      return;
+    }
+    const term = tracker.getTerminalById(tile.id);
+    if (!term) {
+      log(`focusSlot${slot}: tracked tile "${tile.name}" but no live VS Code terminal`);
+      return;
+    }
+    term.show();
+    log(`focusSlot${slot}: focused "${tile.name}"`);
+  }
+  const focusSlotCmds = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) =>
+    vscode.commands.registerCommand(`claudeDashboard.focusSlot${n}`, () => focusTileBySlot(n)),
+  );
+
+  // v0.16.5 (#18) — focus a specific named tile. Bind via keybindings.json
+  // with an `args` string: { "command": "claudeDashboard.focusByName",
+  // "args": "api", "key": "ctrl+alt+a" }. Matches against displayName
+  // first (what the user sees on the tile), then raw terminal.name, then
+  // projectName alias — same priority order as the status-routing matcher
+  // so name resolution feels consistent across features.
+  const focusByNameCmd = vscode.commands.registerCommand(
+    'claudeDashboard.focusByName',
+    (name?: string) => {
+      if (typeof name !== 'string' || name.length === 0) {
+        vscode.window.showWarningMessage(
+          'Claudelike Bar: focusByName requires a name argument. Bind it via keybindings.json with `"args": "<tile-name>"`.',
+        );
+        return;
+      }
+      const live = tracker.getTiles().filter((t) => t.status !== 'registered');
+      const tile = live.find((t) => t.displayName === name)
+        ?? live.find((t) => t.name === name)
+        ?? live.find((t) => configManager.getTerminal(t.name)?.projectName === name);
+      if (!tile) {
+        vscode.window.showInformationMessage(
+          `Claudelike Bar: no live tile named "${name}". Open the terminal first or check the spelling.`,
+        );
+        log(`focusByName("${name}"): no match`);
+        return;
+      }
+      const term = tracker.getTerminalById(tile.id);
+      if (term) {
+        term.show();
+        log(`focusByName("${name}"): focused "${tile.name}"`);
+      }
+    },
+  );
+
   // v0.12 — private test hook. Fires a play for `filename` and resolves
   // with the webview's ack: 'played' (audio.play resolved), 'error' (it
   // rejected — autoplay blocked or decode failed), or 'timeout'. Used only
@@ -447,6 +507,8 @@ export function activate(context: vscode.ExtensionContext) {
     diagnoseCmd,
     toggleAudioCmd,
     openSoundsFolderCmd,
+    ...focusSlotCmds,
+    focusByNameCmd,
     firePlayForTestCmd,
     tracker,
     watcher,

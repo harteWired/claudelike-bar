@@ -1229,7 +1229,7 @@
       <div class="hero__content">
         <div class="hero__text">
           <img class="hero__app-icon" src="media/icon.png" alt="Claudelike Bar app icon — three horizontal stripes (cyan, teal, pink) with status dots, in a rounded square" width="88" height="88">
-          <p class="hero__overline">VS Code Extension <span class="version">v0.16.4</span></p>
+          <p class="hero__overline">VS Code Extension <span class="version">v0.16.5</span></p>
           <h1 class="hero__headline" data-split="words">Live status tiles for every <em>Claude Code</em> terminal.</h1>
           <p class="hero__subhead">A sidebar that shows what every Claude is doing at a glance — animated dots, color-coded borders, drag-to-reorder, context-window tracking, and a passive-aggressive mode that guilt-trips you when you ignore it.</p>
           <div class="hero__cta">
@@ -1524,6 +1524,7 @@
               <li><strong>Click-to-launch for shells</strong> (v0.16.2, #25) — when a shell-typed terminal isn't open, the bar now surfaces it as a click-to-launch tile (gray dot, dashed border, "Launch this shell" action) alongside the registered Claude tiles. Clicking spawns the configured terminal at its <code>cwd</code> and runs the per-terminal <code>command</code> if set. Shell entries don't inherit the global <code>claudeCommand</code>, so a registered shell with no per-terminal command opens an empty shell — no Claude-in-a-shell mishap.</li>
               <li><strong>Rename from tile context menu</strong> (v0.16.3, #11) — right-click any live tile → <em>Rename…</em> opens an InputBox prefilled with the current name. The new name persists as <code>nickname</code> (display) + <code>projectName</code> (status routing), so future hook events that arrive under the new name route to this tile. Empty input or matching the raw terminal name reverts to the underlying VS Code terminal name. Conflicting renames (would steal another tile's name) are rejected with an inline validation error.</li>
               <li><strong>Last-prompt recall</strong> (v0.16.4, #19) — flip <code>"showLastPrompt": true</code> in your config and the bar surfaces the last user prompt you sent in each terminal. Hover the tile for a tooltip preview (truncated to 80 chars); right-click → <em>Show last prompt</em> for the full text in a modal. The hook captures via <code>UserPromptSubmit</code>, truncates at 300 chars at the source, and only on parent-turn input — subagent fan-out is excluded. Off by default since prompts can contain sensitive content.</li>
+              <li><strong>Hotkey bindings</strong> (v0.16.5, #18) — ten commands ready for binding in your own <code>keybindings.json</code>: <code>focusSlot1</code>…<code>focusSlot9</code> jump to the Nth live tile in current sort, and <code>focusByName</code> takes a tile name via <code>args</code> for stable per-project bindings. Slot bindings follow the slot (auto-sort surfaces urgent tiles); forced bindings always land on the named tile.</li>
             </ul>
           </li>
 

@@ -2,7 +2,7 @@
   "name": "claudelike-bar",
   "displayName": "Claudelike Bar",
   "description": "Live sidebar for Claude Code terminals — see what every session is doing at a glance without tab-switching.",
-  "version": "0.16.4",
+  "version": "0.16.5",
   "publisher": "aes87",
   "icon": "media/icon.png",
   "repository": {
@@ -132,6 +132,56 @@
       {
         "command": "claudeDashboard.openSoundsFolder",
         "title": "Open Sounds Folder",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot1",
+        "title": "Focus tile 1",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot2",
+        "title": "Focus tile 2",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot3",
+        "title": "Focus tile 3",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot4",
+        "title": "Focus tile 4",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot5",
+        "title": "Focus tile 5",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot6",
+        "title": "Focus tile 6",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot7",
+        "title": "Focus tile 7",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot8",
+        "title": "Focus tile 8",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusSlot9",
+        "title": "Focus tile 9",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.focusByName",
+        "title": "Focus tile by name",
         "category": "Claudelike Bar"
       }
     ],

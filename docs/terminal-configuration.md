@@ -27,6 +27,28 @@ Two modes, set by the top-level `sortMode` key:
 
 You can drag tiles in either mode — dragging automatically flips `sortMode` to `"manual"`. To go back to status-based sort, set `"sortMode": "auto"` (the `order` values are left in place, harmlessly ignored, and restored if you switch back).
 
+## Hotkey bindings
+
+The bar registers ten commands you can bind in your own VS Code `keybindings.json`:
+
+- `claudeDashboard.focusSlot1` … `claudeDashboard.focusSlot9` — focus the Nth live tile in the current sort. Skips registered (offline) tiles. Soft no-op + toast when the slot is empty.
+- `claudeDashboard.focusByName` — focus a specific named tile. Pass the name via the binding's `args` field. Matches against displayName, then raw terminal name, then `projectName` alias.
+
+Example bindings:
+
+```jsonc
+// Slot bindings — same chord lands on whoever's currently sitting at slot N
+{ "key": "ctrl+alt+1", "command": "claudeDashboard.focusSlot1" },
+{ "key": "ctrl+alt+2", "command": "claudeDashboard.focusSlot2" },
+{ "key": "ctrl+alt+3", "command": "claudeDashboard.focusSlot3" },
+
+// Forced bindings — chord always lands on a specific named tile
+{ "key": "ctrl+alt+a", "command": "claudeDashboard.focusByName", "args": "api" },
+{ "key": "ctrl+alt+h", "command": "claudeDashboard.focusByName", "args": "health-dash" }
+```
+
+Forced bindings beat slot bindings when both target the same tile — they're independent commands. If a slot binding's tile changes (auto-sort floats an urgent one to the top), the chord follows the slot, not the previous tile.
+
 ## Cross-platform auto-start
 
 Use `cwd` + `command` instead of baking `cd /path && claude` into the command string. `cwd` goes through VS Code's API — works on every shell, every platform:

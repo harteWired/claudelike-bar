@@ -60,6 +60,27 @@ Configurable audio cues per state transition — primarily `ready` and `waiting`
 
 Palette command that checks: hooks registration, status dir exists, status files have valid schemas (non-empty `event` field), terminal names match status file project names. Surfaces actionable warnings. Replaces the manual "verify installation" checklist in CLAUDE.md.
 
+### Unified Telegram driver across multiple terminals
+**Requested:** 2026-04-26 (Matt, via Telegram)
+
+**Scope flag (from the requester):** may or may not fit within claudelike-bar's scope — flagging up front so a triage decision can land before any design work.
+
+Surface actions needed from multiple active Claude Code terminals into a unified Telegram integration so the user can drive several terminals from their phone. Each Telegram message must carry enough context for the user to respond *without remembering* what that particular terminal was doing — context comes in the message, not from session memory.
+
+Per-message context (every nudge from a terminal must include):
+
+1. **Last action given to the terminal** — the most recent prompt or instruction the user sent.
+2. **What the terminal has responded with** — the latest output, question, or blocker the agent is paused on.
+3. **The overall effort the terminal is working on** — project name plus a one-line goal so the user can re-orient quickly.
+
+Hard constraint: readable on a mobile Telegram client. Short lines, minimal nesting, no ASCII art, no wide tables. Optimize density before completeness — the user should be able to triage at a glance and reply with a one-liner.
+
+Open scope questions for triage:
+
+1. Does claudelike-bar already track all three context bits? Last action and effort yes (via `UserPromptSubmit` + project name / configured goal). The response side may need a new hook tap — `Notification` body text or the last assistant message at `Stop`.
+2. Is the Telegram fanout claudelike-bar's responsibility, or does it belong in a separate project (e.g. the existing `telegram-channel` project) that consumes the same `/tmp/claude-dashboard/{slug}.json` files? If the latter, claudelike-bar's job is just to expose richer per-terminal state; the relay lives elsewhere.
+3. What triggers a Telegram nudge? Every `Notification` `idle_prompt`? Only when the user is away from VS Code (idle detection)? Per-tile opt-in via `.claudelike-bar.jsonc`?
+
 ### Extended hook events
 **From:** v0.7.6 field report + v0.9.0/v0.9.1 partial implementation
 

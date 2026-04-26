@@ -1,5 +1,7 @@
 # Install guide
 
+> **VS Code Marketplace:** temporarily unavailable — waiting for Microsoft. Use Open VSX in the meantime (works in vanilla VS Code too).
+
 Three install paths. Pick one.
 
 ## Prerequisites
@@ -12,7 +14,7 @@ No `jq`, no bash, no special tools.
 
 ## Fast path (recommended)
 
-1. Install from [Open VSX](https://open-vsx.org/extension/aes87/claudelike-bar) — or any VS Code-compatible marketplace.
+1. Install from [Open VSX](https://open-vsx.org/extension/harteWired/claudelike-bar) — or any VS Code-compatible marketplace.
 2. Open VS Code — a notification prompts: **"Claudelike Bar needs hooks to track terminal status. Set up your projects now?"**
 3. Click **Set Up Projects** to run the wizard, or **Install Hooks Only** for a minimal start.
 
@@ -22,12 +24,12 @@ You can also trigger install manually: `Cmd+Shift+P` → **Claudelike Bar: Insta
 
 ## Dev Containers / Codespaces
 
-Listing `aes87.claudelike-bar` in your `devcontainer.json` under `customizations.vscode.extensions` only works when VS Code's extension gallery is Open VSX (VSCodium, Cursor, and forks). **Vanilla VS Code defaults to the Microsoft Marketplace**, which doesn't have this extension, and the install silently fails — the sidebar just doesn't appear, and there's no error in the build log.
+Listing `harteWired.claudelike-bar` in your `devcontainer.json` under `customizations.vscode.extensions` only works when VS Code's extension gallery is Open VSX (VSCodium, Cursor, and forks). **Vanilla VS Code defaults to the Microsoft Marketplace**, which doesn't have this extension, and the install silently fails — the sidebar just doesn't appear, and there's no error in the build log.
 
 Self-heal by dropping this into your container's `postAttachCommand` (or any script that runs on attach). Idempotent — re-running is a no-op when the extension is already installed, so the same line works across rebuilds:
 
 ```bash
-if ! code --list-extensions 2>/dev/null | grep -q aes87.claudelike-bar; then
+if ! code --list-extensions 2>/dev/null | grep -q harteWired.claudelike-bar; then
   curl -sL https://github.com/aes87/claudelike-bar/releases/latest/download/claudelike-bar.vsix \
     -o /tmp/clb.vsix \
     && code --install-extension /tmp/clb.vsix

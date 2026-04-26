@@ -203,9 +203,18 @@ function patchTile(el, tile) {
   }
 
   // Status dot
+  // v0.16.1 (#25) — a registered tile that's actually a shell entry uses
+  // the shell dot color (gray, no animation) rather than the registered
+  // dot color, so the eye reads it as "shell, not running" instead of
+  // "Claude session, not running."
   const dot = el.querySelector('.dot');
   if (dot) {
-    dot.className = `dot ${tile.status === 'ignored' ? 'ignored' : tile.status}`;
+    const dotClass = tile.status === 'ignored'
+      ? 'ignored'
+      : (tile.status === 'registered' && tile.type === 'shell')
+        ? 'shell'
+        : tile.status;
+    dot.className = `dot ${dotClass}`;
   }
 
   // Time
@@ -278,7 +287,12 @@ function createTileEl(tile, index) {
   const displayName = tile.displayName || tile.name;
   const timeStr = formatRelativeTime(tile.lastActivity);
   const statusLabel = tile.statusLabel || tile.status;
-  const dotClass = tile.status === 'ignored' ? 'ignored' : tile.status;
+  // v0.16.1 (#25) — shell-typed registered tile uses the shell dot color.
+  const dotClass = tile.status === 'ignored'
+    ? 'ignored'
+    : (tile.status === 'registered' && tile.type === 'shell')
+      ? 'shell'
+      : tile.status;
 
   const iconHtml = tile.icon
     ? `<span class="tile-icon codicon codicon-${escapeHtml(tile.icon)}"></span>`
@@ -455,8 +469,12 @@ function showContextMenu(e, tileId) {
   // action. Mark as done / Pin / Kill / Set color / Clone don't apply to
   // a tile with no underlying terminal yet. The user can pin/color the
   // entry by editing the JSONC config directly until the terminal exists.
+  // v0.16.1 (#25) — shell entries get the same treatment with a relabeled
+  // action since "Launch this project" reads wrong for an ad-hoc shell.
   if (isRegistered) {
-    const launchItem = menuItem('\uD83D\uDE80', 'Launch this project', () => {
+    const isShellRegistered = tile?.type === 'shell';
+    const label = isShellRegistered ? 'Launch this shell' : 'Launch this project';
+    const launchItem = menuItem('\uD83D\uDE80', label, () => {
       vscode.postMessage({ type: 'launchByName', name: tile.name });
     });
     menu.appendChild(launchItem);

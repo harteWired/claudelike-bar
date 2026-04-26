@@ -466,10 +466,17 @@ export class ConfigManager implements vscode.Disposable {
    */
   getAutoStartCommand(terminalName?: string): string | null {
     if (terminalName) {
-      const override = this.config.terminals[terminalName]?.command;
+      const cfg = this.config.terminals[terminalName];
+      const override = cfg?.command;
       if (override !== undefined) {
         return override === null || override === '' ? null : override;
       }
+      // v0.16.1 (#25) — shell-typed entries don't fall back to the global
+      // claudeCommand. Falling through would launch Claude in a plain
+      // shell tile, which contradicts the user's `type: "shell"` opt-out.
+      // No per-terminal command + shell type = spawn the terminal with
+      // nothing running in it (just a shell prompt).
+      if (cfg?.type === 'shell') return null;
     }
     const cmd = this.config.claudeCommand;
     if (cmd == null || cmd === '') return null;

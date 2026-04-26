@@ -1063,12 +1063,6 @@ export class TerminalTracker implements vscode.Disposable {
     for (const [slug, cfg] of Object.entries(all)) {
       if (realNames.has(slug)) continue;
       if (cfg.hidden === true) continue;
-      // v0.16.0 (#25) — shell entries don't get a registered/launch tile.
-      // The whole point of `type: "shell"` is "this is a plain terminal,
-      // nothing special" — surfacing it as a dim "click to launch" tile
-      // when its terminal is closed contradicts that intent. A user who
-      // wants their shell back can spawn it via the VS Code terminal UI.
-      if (cfg.type === 'shell') continue;
       // v0.15.0 (#20) — a slug with a fresh non-idle status file is running
       // somewhere; the tracker just hasn't associated a VS Code terminal
       // with it (common cause: CLAUDELIKE_BAR_NAME env var routes the hook
@@ -1085,6 +1079,13 @@ export class TerminalTracker implements vscode.Disposable {
         id = this.nextSyntheticId--;
         this.syntheticIds.set(slug, id);
       }
+      // v0.16.1 (#25) — carry tile type onto the synthesized registered
+      // tile so the webview can apply shell-style chrome (gray dot, no
+      // Claude-specific menu items) on the click-to-launch tile too.
+      // Click handler routes through launchByName regardless of type;
+      // launchProject + getAutoStartCommand know to skip the global
+      // claudeCommand fallback when the entry is a shell.
+      const isShell = cfg.type === 'shell';
       out.push({
         id,
         name: slug,
@@ -1098,6 +1099,7 @@ export class TerminalTracker implements vscode.Disposable {
         contextWarn: thresholds.warn,
         contextCrit: thresholds.crit,
         pinned: false,
+        type: isShell ? 'shell' : 'claude',
       });
     }
     return out;

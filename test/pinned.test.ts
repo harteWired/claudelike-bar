@@ -466,23 +466,64 @@ describe('TerminalTracker — shell tiles (#25)', () => {
     cm.dispose();
   });
 
-  it('shell tiles do NOT get a registered/launch tile when their terminal is closed', () => {
+  it('shell tiles get a click-to-launch tile when their terminal is closed (v0.16.1)', () => {
     writeConfig({
       terminals: {
         'absent-shell': { color: 'white', icon: null, nickname: null, autoStart: false, type: 'shell' as any },
         'absent-claude': { color: 'cyan', icon: null, nickname: null, autoStart: false },
       },
     });
-    // Neither terminal is open. Synthesis should produce a launch tile for
-    // the Claude one but NOT the shell one.
+    // Neither terminal is open — synthesis produces a launch tile for both,
+    // with the shell entry tagged so the webview renders gray-dot chrome.
     const cm = new ConfigManager(CONFIG_PATH);
     const tracker = new TerminalTracker(cm);
 
-    const names = tracker.getTiles().map((t) => t.name);
-    expect(names).toContain('absent-claude');
-    expect(names).not.toContain('absent-shell');
+    const tiles = tracker.getTiles();
+    const shellTile = tiles.find((t) => t.name === 'absent-shell');
+    const claudeTile = tiles.find((t) => t.name === 'absent-claude');
+
+    expect(shellTile?.status).toBe('registered');
+    expect(shellTile?.type).toBe('shell');
+    expect(claudeTile?.status).toBe('registered');
+    expect(claudeTile?.type).toBe('claude');
 
     tracker.dispose();
+    cm.dispose();
+  });
+
+  it('hidden: true still suppresses shell entries from the launch zone', () => {
+    writeConfig({
+      terminals: {
+        'archived-shell': { color: 'white', icon: null, nickname: null, autoStart: false, type: 'shell' as any, hidden: true },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(tracker.getTiles()).toHaveLength(0);
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('getAutoStartCommand does NOT fall back to global claudeCommand for shell entries (#25)', () => {
+    writeConfig({
+      claudeCommand: 'claude --auto',
+      terminals: {
+        'shell-no-cmd': { color: 'white', icon: null, nickname: null, autoStart: false, type: 'shell' as any },
+        'shell-with-cmd': { color: 'white', icon: null, nickname: null, autoStart: false, type: 'shell' as any, command: 'fish' },
+        'claude-no-cmd': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+
+    // Shell with no per-terminal command → null. NOT the global claudeCommand.
+    expect(cm.getAutoStartCommand('shell-no-cmd')).toBeNull();
+    // Shell with explicit command → that command.
+    expect(cm.getAutoStartCommand('shell-with-cmd')).toBe('fish');
+    // Claude with no per-terminal command → falls back to global as before.
+    expect(cm.getAutoStartCommand('claude-no-cmd')).toBe('claude --auto');
+
     cm.dispose();
   });
 

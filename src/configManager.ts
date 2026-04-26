@@ -574,6 +574,29 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   /**
+   * v0.16.3 (#11) — set both nickname (display) and projectName (status
+   * routing) for a tile, in one config write. The webview's "Rename"
+   * action calls this. Nickname drives what the user sees on the tile;
+   * projectName lets incoming status JSONs that claim `project: <new>`
+   * route to this tile even though terminal.name (the underlying slug)
+   * is unchanged. Empty string clears both fields, reverting to the
+   * raw terminal name.
+   */
+  setRenameOverride(name: string, newName: string): void {
+    const entry = this.config.terminals[name];
+    if (!entry) return;
+    const trimmed = newName.trim();
+    if (trimmed.length === 0 || trimmed === name) {
+      entry.nickname = null;
+      delete entry.projectName;
+    } else {
+      entry.nickname = trimmed;
+      entry.projectName = trimmed;
+    }
+    this.scheduleSave();
+  }
+
+  /**
    * v0.13.4 (#4) — flip the `pinned` flag on a terminal entry. Pinned tiles
    * stay in a fixed-position zone at the bottom of the bar regardless of
    * `sortMode` (the tracker handles the splitting; ConfigManager just

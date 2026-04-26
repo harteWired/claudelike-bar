@@ -318,6 +318,41 @@ export function activate(context: vscode.ExtensionContext) {
         tracker.setPinned(message.id, message.pinned);
         break;
 
+      case 'renameTile': {
+        // v0.16.3 (#11) — show an InputBox prefilled with the current
+        // displayName. Empty/cancel = no change. Whitespace-trimmed result
+        // is persisted as nickname (display) + projectName (status routing)
+        // on the matching config entry. The tile updates immediately via
+        // the onChange fire inside setRenameOverride.
+        const tile = tracker.getTiles().find((t) => t.id === message.id);
+        if (!tile) break;
+        const current = tile.displayName || tile.name;
+        vscode.window.showInputBox({
+          prompt: `Rename "${tile.name}"`,
+          value: current,
+          placeHolder: 'New display name (or empty to revert to terminal name)',
+          validateInput: (value) => {
+            // Reject only inputs that would round-trip into a different
+            // tile's slug — that would silently steal status updates.
+            const trimmed = value.trim();
+            if (trimmed === current.trim() || trimmed === tile.name) return null;
+            const conflict = tracker.getTiles().find((t) =>
+              t.id !== tile.id && (t.name === trimmed || t.displayName === trimmed),
+            );
+            if (conflict) {
+              return `Another tile already uses "${trimmed}" — pick a different name.`;
+            }
+            return null;
+          },
+        }).then((result) => {
+          // undefined = user pressed Esc / closed without confirming.
+          if (result === undefined) return;
+          tracker.setRenameOverride(message.id, result);
+          log(`renameTile ${tile.name}: → "${result}"`);
+        });
+        break;
+      }
+
       case 'launchByName':
         // v0.13.4 (#15) — click on a registered (offline) tile launches
         // the project. Routes through the same shared helper as the

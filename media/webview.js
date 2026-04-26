@@ -539,6 +539,16 @@ function showContextMenu(e, tileId) {
   // Separator
   menu.appendChild(menuSeparator());
 
+  // v0.16.3 (#11) — Rename. Applies to both Claude tiles and shell tiles
+  // (registered tiles short-circuit above). VS Code's Terminal.name is
+  // read-only by API, so the rename writes nickname + projectName to the
+  // config entry — display flips on the tile, future status JSONs that
+  // arrive under the new name route here.
+  const renameItem = menuItem('\u270E', 'Rename…', () => {
+    vscode.postMessage({ type: 'renameTile', id: tileId });
+  });
+  menu.appendChild(renameItem);
+
   // Clone terminal
   const cloneItem = menuItem('\u2750', 'Clone terminal', () => {
     vscode.postMessage({ type: 'cloneTerminal', id: tileId });

@@ -566,6 +566,98 @@ describe('TerminalTracker — shell tiles (#25)', () => {
   });
 });
 
+describe('Rename tile (#11)', () => {
+  it('ConfigManager.setRenameOverride writes nickname + projectName', () => {
+    writeConfig({
+      terminals: {
+        'powershell': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+
+    cm.setRenameOverride('powershell', 'my-api');
+    const cfg = cm.getTerminal('powershell');
+    expect(cfg?.nickname).toBe('my-api');
+    expect(cfg?.projectName).toBe('my-api');
+
+    cm.dispose();
+  });
+
+  it('ConfigManager.setRenameOverride trims whitespace', () => {
+    writeConfig({ terminals: { 'p': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    const cm = new ConfigManager(CONFIG_PATH);
+
+    cm.setRenameOverride('p', '   spaced   ');
+    expect(cm.getTerminal('p')?.nickname).toBe('spaced');
+
+    cm.dispose();
+  });
+
+  it('ConfigManager.setRenameOverride empty/equal-to-name reverts both fields', () => {
+    writeConfig({
+      terminals: {
+        'p': { color: 'cyan', icon: null, nickname: 'old-nickname', autoStart: false, projectName: 'old-project' },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+
+    cm.setRenameOverride('p', '');
+    expect(cm.getTerminal('p')?.nickname).toBeNull();
+    expect(cm.getTerminal('p')?.projectName).toBeUndefined();
+
+    cm.setRenameOverride('p', 'reapplied');
+    expect(cm.getTerminal('p')?.nickname).toBe('reapplied');
+
+    cm.setRenameOverride('p', 'p'); // same as terminal.name → revert
+    expect(cm.getTerminal('p')?.nickname).toBeNull();
+    expect(cm.getTerminal('p')?.projectName).toBeUndefined();
+
+    cm.dispose();
+  });
+
+  it('TerminalTracker.setRenameOverride updates displayName immediately', () => {
+    writeConfig({
+      terminals: {
+        'powershell': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    addMockTerminal('powershell');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const before = tracker.getTiles().find((t) => t.name === 'powershell')!;
+    expect(before.displayName).toBe('powershell');
+
+    tracker.setRenameOverride(before.id, 'my-api');
+    const after = tracker.getTiles().find((t) => t.name === 'powershell')!;
+    expect(after.displayName).toBe('my-api');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('renamed tile picks up status updates routed under the new projectName', () => {
+    writeConfig({
+      terminals: {
+        'powershell': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    addMockTerminal('powershell');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const tile = tracker.getTiles().find((t) => t.name === 'powershell')!;
+    tracker.setRenameOverride(tile.id, 'my-api');
+
+    // Hook fires for project=my-api — should match the renamed tile via projectName alias.
+    tracker.updateStatus('my-api', 'working', 'PreToolUse');
+    expect(tracker.getTiles().find((t) => t.name === 'powershell')?.status).toBe('working');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+});
+
 describe('TerminalTracker.setPinned', () => {
   it('flips the tile flag and persists to config', () => {
     writeConfig({ terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });

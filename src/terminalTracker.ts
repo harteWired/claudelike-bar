@@ -936,6 +936,23 @@ export class TerminalTracker implements vscode.Disposable {
     this.onChangeEmitter.fire();
   }
 
+  /**
+   * v0.16.3 (#11) — rename a tile from the webview context menu. Persists
+   * `nickname` (display) + `projectName` (status routing) on the config
+   * entry so incoming hook events that claim the new name route to this
+   * tile too. The underlying VS Code terminal name is left alone — VS
+   * Code's `Terminal.name` is read-only by API. Empty string clears both
+   * fields, reverting to the raw terminal name.
+   */
+  setRenameOverride(id: number, newName: string): void {
+    const tile = this.terminals.get(id);
+    if (!tile) return;
+    this.configManager.setRenameOverride(tile.name, newName);
+    const cfg = this.configManager.getTerminal(tile.name);
+    tile.displayName = cfg?.nickname || tile.name;
+    this.onChangeEmitter.fire();
+  }
+
   /** v0.13.4 (#4) — flip the pinned flag from the webview context menu. */
   setPinned(id: number, pinned: boolean): void {
     const tile = this.terminals.get(id);

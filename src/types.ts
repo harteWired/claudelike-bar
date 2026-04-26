@@ -96,6 +96,7 @@ export type WebviewMessage =
   | { type: 'launchProject' }
   | { type: 'setSortMode'; mode: 'auto' | 'manual' }
   | { type: 'setPinned'; id: number; pinned: boolean }
+  | { type: 'renameTile'; id: number }
   | { type: 'launchByName'; name: string }
   // v0.12 — webview → extension acks after an audio play attempt. Only the
   // internal __firePlayForTest command consumes these; production code

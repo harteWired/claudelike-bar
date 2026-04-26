@@ -18,7 +18,7 @@ This fixes that.
 
 <div align="center">
 
-### [LIVE PREVIEW — See it in action →](https://aes87.github.io/claudelike-bar/)
+### [LIVE PREVIEW — See it in action →](https://lab.mattharte.com/claudelike-bar/)
 
 *Interactive demo with animated status dots, theme colors, and all five states*
 

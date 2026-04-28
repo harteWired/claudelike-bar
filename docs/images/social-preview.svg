@@ -81,6 +81,6 @@
 
   <!-- Footer / source row -->
   <line x1="450" y1="525" x2="1160" y2="525" stroke="rgba(245,239,224,0.10)" stroke-width="1"/>
-  <text x="450" y="555" class="footer">github.com/aes87/claudelike-bar</text>
+  <text x="450" y="555" class="footer">github.com/harteWired/claudelike-bar</text>
   <text x="1160" y="555" text-anchor="end" class="footer">Marketplace · Open VSX</text>
 </svg>

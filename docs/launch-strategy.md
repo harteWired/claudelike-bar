@@ -57,10 +57,10 @@ Testing, deployment, and outreach plan. Designed to be executed primarily throug
 
 | Channel | Status | URL |
 |---------|--------|-----|
-| GitHub | Published | github.com/aes87/claudelike-bar |
+| GitHub | Published | github.com/harteWired/claudelike-bar |
 | Open VSX | Published (v0.7.6) | open-vsx.org/extension/aes87/claudelike-bar |
 | VS Code Marketplace | Not published | Requires Azure DevOps account |
-| GitHub Pages demo | Live | aes87.github.io/claudelike-bar |
+| GitHub Pages demo | Live | harteWired.github.io/claudelike-bar |
 
 ### Release Pipeline (AI-native)
 
@@ -147,7 +147,7 @@ Every piece of content is drafted by Claude Code, reviewed by you, and posted ma
 | Field | Content |
 |-------|---------|
 | Title | "Show HN: Claudelike Bar — sidebar dashboard for Claude Code terminals" |
-| URL | `https://aes87.github.io/claudelike-bar/` (demo page, not GitHub) |
+| URL | `https://harteWired.github.io/claudelike-bar/` (demo page, not GitHub) |
 | Comment | 3-4 sentences: what it does, why you built it, how to install, ask for feedback |
 
 > **Action:** Claude drafts the comment. Post on a Tuesday or Wednesday morning. Don't mention AI authorship in the HN post — let the demo speak.
@@ -193,7 +193,7 @@ docs/outreach/
 | Metric | Source | Goal (30 days) |
 |--------|--------|-----------------|
 | Open VSX installs | open-vsx.org dashboard | 100+ |
-| GitHub stars | github.com/aes87/claudelike-bar | 50+ |
+| GitHub stars | github.com/harteWired/claudelike-bar | 50+ |
 | GitHub issues (bug reports) | GitHub Issues | 5+ (means people are using it) |
 | Reddit post upvotes | r/ClaudeAI | 50+ |
 | Unique testers who report back | GitHub Issues / Reddit comments | 10+ |

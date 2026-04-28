@@ -37,7 +37,7 @@ Each event triggers `dashboard-status.js`, which writes a small JSON file that t
 
 Located at `~/.claude/hooks/dashboard-status.js`. This is the entire file — nothing hidden:
 
-See [`hooks/dashboard-status.js`](https://github.com/aes87/claudelike-bar/blob/main/hooks/dashboard-status.js) on GitHub for the current source — it's the same file the extension ships. The script is ~130 lines, zero dependencies, Node.js built-ins only.
+See [`hooks/dashboard-status.js`](https://github.com/harteWired/claudelike-bar/blob/main/hooks/dashboard-status.js) on GitHub for the current source — it's the same file the extension ships. The script is ~130 lines, zero dependencies, Node.js built-ins only.
 
 **What it does:**
 - Reads the Claude Code hook JSON payload from stdin
@@ -241,9 +241,9 @@ Either component can run without the other. Hooks without statusline: state tran
 
 Everything here is generated from the actual source files:
 
-- Hook script: [`hooks/dashboard-status.js`](https://github.com/aes87/claudelike-bar/blob/main/hooks/dashboard-status.js)
-- Statusline script: [`hooks/claudelike-statusline.js`](https://github.com/aes87/claudelike-bar/blob/main/hooks/claudelike-statusline.js)
-- Hook install: [`src/setup.ts`](https://github.com/aes87/claudelike-bar/blob/main/src/setup.ts)
-- Statusline install: [`src/statusline.ts`](https://github.com/aes87/claudelike-bar/blob/main/src/statusline.ts)
+- Hook script: [`hooks/dashboard-status.js`](https://github.com/harteWired/claudelike-bar/blob/main/hooks/dashboard-status.js)
+- Statusline script: [`hooks/claudelike-statusline.js`](https://github.com/harteWired/claudelike-bar/blob/main/hooks/claudelike-statusline.js)
+- Hook install: [`src/setup.ts`](https://github.com/harteWired/claudelike-bar/blob/main/src/setup.ts)
+- Statusline install: [`src/statusline.ts`](https://github.com/harteWired/claudelike-bar/blob/main/src/statusline.ts)
 
 If anything here diverges from the source, the source wins — file an issue.

@@ -22,7 +22,7 @@ const HOOK_EVENTS = [
   'PostCompact',         // v0.9.1: context compaction finished
 ];
 
-const HOOKS_DOC_URL = 'https://github.com/aes87/claudelike-bar/blob/main/docs/HOOKS.md';
+const HOOKS_DOC_URL = 'https://github.com/harteWired/claudelike-bar/blob/main/docs/HOOKS.md';
 
 function hookCommand(): string {
   const script = path.join(hooksDir(), HOOK_FILENAME);

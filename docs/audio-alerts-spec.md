@@ -1,7 +1,7 @@
 # Audio Alerts — Design Spec
 
 Status: proposed
-Issue: [#3](https://github.com/aes87/claudelike-bar/issues/3)
+Issue: [#3](https://github.com/harteWired/claudelike-bar/issues/3)
 Target: v0.12
 
 ## Summary

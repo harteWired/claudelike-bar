@@ -1,7 +1,7 @@
 # Launch Registered Project — Design Spec
 
 Status: proposed
-Issue: [#14](https://github.com/aes87/claudelike-bar/issues/14)
+Issue: [#14](https://github.com/harteWired/claudelike-bar/issues/14)
 Target: v0.13
 
 ## Summary
@@ -21,7 +21,7 @@ This spec delivers both via a new command, a sidebar header button, a tile conte
 
 ## Non-goals
 
-- Dim/offline tiles for closed registered projects (that's [#15](https://github.com/aes87/claudelike-bar/issues/15) — a larger evolution).
+- Dim/offline tiles for closed registered projects (that's [#15](https://github.com/harteWired/claudelike-bar/issues/15) — a larger evolution).
 - A settings UI for flipping `autoStart` on existing entries — config editing stays via the gear → JSONC file.
 - Bulk "launch all registered" action — possible but hasn't come up; add if users request it.
 - Inline tile right-click to launch a *specific* unopened project by name (doesn't fit the context-menu model; the launcher QuickPick covers the same need better).
@@ -60,7 +60,7 @@ export function launchRegisteredProject(
 }
 ```
 
-`runAutoStart` becomes a thin loop over the filtered name list calling `launchRegisteredProject`. Same for the new command. Pre-flight check for a missing cwd (see [#13](https://github.com/aes87/claudelike-bar/issues/13)) lives in this one function so both paths benefit.
+`runAutoStart` becomes a thin loop over the filtered name list calling `launchRegisteredProject`. Same for the new command. Pre-flight check for a missing cwd (see [#13](https://github.com/harteWired/claudelike-bar/issues/13)) lives in this one function so both paths benefit.
 
 ### New `LaunchRegisteredProject` command
 
@@ -170,7 +170,7 @@ Tests:
 ## Open questions
 
 1. **Icon choice for the sidebar button** — `$(rocket)` vs `$(play)` vs `$(folder-opened)`. Defer to implementation-time visual check next to the existing `$(add)`.
-2. **When the user picks an entry whose `path` doesn't exist** — hard-skip, or attempt the launch anyway (VS Code will surface the "directory doesn't exist" error like [#13](https://github.com/aes87/claudelike-bar/issues/13))? My lean: filter them out of the QuickPick entirely with a "(N entries hidden — missing paths)" footer hint. Same validator logic as [#13](https://github.com/aes87/claudelike-bar/issues/13) will eventually use.
+2. **When the user picks an entry whose `path` doesn't exist** — hard-skip, or attempt the launch anyway (VS Code will surface the "directory doesn't exist" error like [#13](https://github.com/harteWired/claudelike-bar/issues/13))? My lean: filter them out of the QuickPick entirely with a "(N entries hidden — missing paths)" footer hint. Same validator logic as [#13](https://github.com/harteWired/claudelike-bar/issues/13) will eventually use.
 3. **`alwaysShow` for missing-path entries** vs silent filter — tradeoff between surfacing broken config (good for fixing it) and noise (bad for the common case). Flip a coin at implementation time; both are trivial to swap.
 4. **Naming: "Register Project" staying as one command with a branch vs two commands.** Recommendation above is Option A (one command, one branch). If during implementation the branch feels like it regresses the common case, fall back to Option B.
 
@@ -189,5 +189,5 @@ v0.13.0:
 
 ## Depends on / blocks
 
-- Can land independently of [#13](https://github.com/aes87/claudelike-bar/issues/13) (cwd pre-flight), but the "skip missing-path entries" hint in the QuickPick should reuse whatever validator [#13](https://github.com/aes87/claudelike-bar/issues/13) lands for consistency.
-- Unblocks [#15](https://github.com/aes87/claudelike-bar/issues/15) — the offline-tile evolution. That issue's tile-click-to-launch path is the same `launchRegisteredProject` helper this spec extracts.
+- Can land independently of [#13](https://github.com/harteWired/claudelike-bar/issues/13) (cwd pre-flight), but the "skip missing-path entries" hint in the QuickPick should reuse whatever validator [#13](https://github.com/harteWired/claudelike-bar/issues/13) lands for consistency.
+- Unblocks [#15](https://github.com/harteWired/claudelike-bar/issues/15) — the offline-tile evolution. That issue's tile-click-to-launch path is the same `launchRegisteredProject` helper this spec extracts.

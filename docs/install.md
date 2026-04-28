@@ -35,7 +35,7 @@ If you want belt-and-suspenders self-heal — for example, environments where th
 
 ```bash
 if ! code --list-extensions 2>/dev/null | grep -qE 'harteWired\.claudelike-?bar'; then
-  curl -sL https://github.com/aes87/claudelike-bar/releases/latest/download/claudelike-bar.vsix \
+  curl -sL https://github.com/harteWired/claudelike-bar/releases/latest/download/claudelike-bar.vsix \
     -o /tmp/clb.vsix \
     && code --install-extension /tmp/clb.vsix
 fi
@@ -44,7 +44,7 @@ fi
 Or point directly at a pinned version instead of `latest`:
 
 ```bash
-code --install-extension https://github.com/aes87/claudelike-bar/releases/download/v0.14.0/claudelike-bar-0.14.0.vsix
+code --install-extension https://github.com/harteWired/claudelike-bar/releases/download/v0.14.0/claudelike-bar-0.14.0.vsix
 ```
 
 Everything else (hooks, config, sounds, statusline) lives in `~/.claude/` — persist that directory via a Docker volume and rebuilds don't touch your setup.

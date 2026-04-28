@@ -21,7 +21,7 @@ import { claudeDir, hooksDir, settingsPath, writeSettingsAtomic, readExtensionVe
  */
 
 const STATUSLINE_FILENAME = 'claudelike-statusline.js';
-const STATUSLINE_DOC_URL = 'https://github.com/aes87/claudelike-bar/blob/main/docs/HOOKS.md#statusline-optional';
+const STATUSLINE_DOC_URL = 'https://github.com/harteWired/claudelike-bar/blob/main/docs/HOOKS.md#statusline-optional';
 const BACKUP_FILENAME = '.claudelike-bar-statusline-backup.json';
 
 /**

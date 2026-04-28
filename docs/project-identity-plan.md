@@ -1,6 +1,6 @@
 # Project Identity Architecture — Options
 
-**Issue:** [#6](https://github.com/aes87/claudelike-bar/issues/6) — extension assumes all projects live under the workspace root.
+**Issue:** [#6](https://github.com/harteWired/claudelike-bar/issues/6) — extension assumes all projects live under the workspace root.
 
 ## Problem Summary
 

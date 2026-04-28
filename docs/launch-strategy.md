@@ -58,7 +58,7 @@ Testing, deployment, and outreach plan. Designed to be executed primarily throug
 | Channel | Status | URL |
 |---------|--------|-----|
 | GitHub | Published | github.com/harteWired/claudelike-bar |
-| Open VSX | Published (v0.7.6) | open-vsx.org/extension/aes87/claudelike-bar |
+| Open VSX | Published (v0.7.6) | open-vsx.org/extension/harteWired/claudelike-bar |
 | VS Code Marketplace | Not published | Requires Azure DevOps account |
 | GitHub Pages demo | Live | harteWired.github.io/claudelike-bar |
 

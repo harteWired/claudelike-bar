@@ -177,4 +177,135 @@ describe('dashboard-status.js hook', () => {
     const files = fs.readdirSync(tmpDir);
     expect(files.filter(f => f.includes('.tmp'))).toHaveLength(0);
   });
+
+  // v0.18.1 (belfry) — last_response capture
+  it('writes last_response on Stop when transcript_path is provided', () => {
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: 'user', content: 'hi' }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'Hello back!' }] }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toBe('Hello back!');
+    expect(typeof statusFile.last_response_at).toBe('number');
+  });
+
+  it('writes last_response on Notification', () => {
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: 'user', content: 'do X' }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'Need permission to run X' }] }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Notification',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toBe('Need permission to run X');
+  });
+
+  it('skips tool_use blocks and picks the last text block', () => {
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: 'user', content: 'do X' }),
+      JSON.stringify({
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: '1', name: 'Bash', input: {} },
+          { type: 'text', text: 'I ran the command and the result is ready.' },
+        ],
+      }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toBe('I ran the command and the result is ready.');
+  });
+
+  it('truncates over-long assistant responses with ellipsis', () => {
+    const longText = 'a'.repeat(800);
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: longText }] }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toMatch(/^a{500}…$/);
+  });
+
+  it('skips last_response capture for subagent Stop events', () => {
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'subagent text' }] }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        cwd: path.join(tmpDir, 'my-project'),
+        agent_type: 'general-purpose',
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toBeUndefined();
+  });
+
+  it('does not write last_response on PreToolUse / UserPromptSubmit', () => {
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'should not surface' }] }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'PreToolUse',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toBeUndefined();
+  });
+
+  it('handles missing transcript_path silently', () => {
+    const { statusFile, exitCode } = runHook(
+      JSON.stringify({ hook_event_name: 'Stop', cwd: path.join(tmpDir, 'my-project') }),
+      { statusDir: tmpDir },
+    );
+    expect(exitCode).toBe(0);
+    expect(statusFile.last_response).toBeUndefined();
+  });
+
+  it('handles non-existent transcript file silently', () => {
+    const { statusFile, exitCode } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: '/nonexistent/path/transcript.jsonl',
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(exitCode).toBe(0);
+    expect(statusFile.last_response).toBeUndefined();
+  });
 });

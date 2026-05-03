@@ -45,6 +45,68 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// v0.18.1 (belfry) — pull the last assistant text out of a Claude Code
+// JSONL transcript. Used to populate `last_response` on Stop/Notification
+// so consumers (the webview's `Show last prompt`-style modal, belfry's
+// Telegram messages) have end-of-turn context for the user.
+//
+// Reads only the tail of the file (default 64KB) — assistant messages
+// rarely exceed that, and we'd rather miss a too-long response than
+// stall the hook on a multi-MB session log. Scans backwards line by line
+// for the most recent {role:"assistant"} entry and extracts its first
+// text block. Returns null on any IO/parse failure — the hook must never
+// fail Claude's execution.
+function extractLastAssistantText(transcriptPath, maxBytes = 65536, charCap = 500) {
+  if (!transcriptPath) return null;
+  let stat;
+  try { stat = fs.statSync(transcriptPath); }
+  catch { return null; }
+  const start = Math.max(0, stat.size - maxBytes);
+  let text;
+  let fd;
+  try {
+    fd = fs.openSync(transcriptPath, 'r');
+    const buf = Buffer.alloc(stat.size - start);
+    fs.readSync(fd, buf, 0, buf.length, start);
+    text = buf.toString('utf8');
+  } catch {
+    return null;
+  } finally {
+    if (fd !== undefined) { try { fs.closeSync(fd); } catch {} }
+  }
+  const lines = text.split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    let entry;
+    try { entry = JSON.parse(line); }
+    catch { continue; } // partial line at the byte boundary, or transcript noise
+    const role = entry?.role || entry?.message?.role;
+    if (role !== 'assistant') continue;
+    const content = entry?.content ?? entry?.message?.content;
+    const extracted = extractAssistantContent(content);
+    if (extracted) {
+      return extracted.length > charCap ? extracted.slice(0, charCap) + '…' : extracted;
+    }
+  }
+  return null;
+}
+
+function extractAssistantContent(content) {
+  if (typeof content === 'string') return content.trim() || null;
+  if (Array.isArray(content)) {
+    // Pick the first text block. tool_use / thinking blocks aren't user-visible
+    // text and shouldn't be surfaced as "what Claude said."
+    for (const block of content) {
+      if (typeof block === 'string' && block.trim()) return block.trim();
+      if (block && block.type === 'text' && typeof block.text === 'string' && block.text.trim()) {
+        return block.text.trim();
+      }
+    }
+  }
+  return null;
+}
+
 function main() {
   const statusDir = process.env.CLAUDELIKE_STATUS_DIR
     || path.join(os.tmpdir(), 'claude-dashboard');
@@ -71,6 +133,7 @@ function main() {
   let sessionEndReason = '';   // v0.9.1: SessionEnd matcher
   let compactionTrigger = '';  // v0.9.1: PreCompact/PostCompact matcher
   let userPrompt = '';         // v0.16.4 (#19): UserPromptSubmit prompt text
+  let transcriptPath = '';     // v0.18.1 (belfry): path to JSONL session transcript
   if (input) {
     try {
       const parsed = JSON.parse(input);
@@ -92,6 +155,12 @@ function main() {
       if (event === 'UserPromptSubmit' && !agentType) {
         const raw = typeof parsed.prompt === 'string' ? parsed.prompt : '';
         userPrompt = raw.length > 300 ? raw.slice(0, 300) + '…' : raw;
+      }
+      // v0.18.1 (belfry) — claude code passes transcript_path on most events.
+      // Used by extractLastAssistantText below to grab the last assistant turn
+      // for end-of-turn (Stop) and mid-turn-prompt (Notification) events.
+      if (typeof parsed.transcript_path === 'string') {
+        transcriptPath = parsed.transcript_path;
       }
     } catch {
       // Malformed JSON — leave event/cwd empty, fall back below.
@@ -190,6 +259,19 @@ function main() {
   if (event === 'UserPromptSubmit' && userPrompt) {
     ownFields.last_prompt = userPrompt;
     ownFields.last_prompt_at = timestamp;
+  }
+
+  // v0.18.1 (belfry) — capture the last assistant text on end-of-turn (Stop)
+  // and mid-turn-prompt (Notification). Subagent events are skipped (only
+  // the parent's response is the user's "what Claude said"). Read-merge-
+  // write below preserves last_response across other events that don't
+  // carry a fresh transcript update.
+  if ((event === 'Stop' || event === 'Notification') && !agentType) {
+    const lastResp = extractLastAssistantText(transcriptPath);
+    if (lastResp) {
+      ownFields.last_response = lastResp;
+      ownFields.last_response_at = timestamp;
+    }
   }
 
   let payload = ownFields;

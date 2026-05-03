@@ -106,6 +106,7 @@ export type WebviewMessage =
   | { type: 'renameTile'; id: number }
   | { type: 'showLastPrompt'; id: number }
   | { type: 'launchByName'; name: string }
+  | { type: 'hideRegisteredTile'; name: string }
   // v0.12 — webview → extension acks after an audio play attempt. Only the
   // internal __firePlayForTest command consumes these; production code
   // ignores them. Kept always-on so the CI smoke test doesn't need a
@@ -137,6 +138,13 @@ export interface AudioConfig {
   enabled: boolean;
   volume: number;       // 0.0 – 1.0
   debounceMs: number;
+  /**
+   * v0.18.0 (#28) — when true, suppress the chime if the destination tile
+   * is the focused VS Code terminal. Pre-v0.18 the suppression was always
+   * on (and silently swallowed turn-done chimes when the user's eyes were
+   * on the editor pane, not the focused terminal). Default: false.
+   */
+  suppressOnFocusedTile: boolean;
   sounds: {
     turnDone?: string | null;
     midJobPrompt?: string | null;

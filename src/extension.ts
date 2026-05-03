@@ -442,6 +442,18 @@ export function activate(context: vscode.ExtensionContext) {
         // QuickPick launcher and runAutoStart.
         launchRegisteredProject(configManager, tracker, message.name, log);
         break;
+
+      case 'hideRegisteredTile':
+        // v0.18.0 (#27) — right-click "Hide from bar" on a registered tile.
+        // Sets `hidden: true` on the config entry; the synth filter drops
+        // the tile from the bar. The live tile is unaffected — opening the
+        // project from anywhere brings it back as a regular tile until the
+        // user closes it again.
+        if (configManager.setHidden(message.name, true)) {
+          log(`hide-registered: ${message.name}`);
+          refreshTiles();
+        }
+        break;
     }
   };
 

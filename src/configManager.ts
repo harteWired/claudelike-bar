@@ -111,6 +111,12 @@ export interface AudioConfigRaw {
   enabled?: boolean;
   volume?: number;
   debounceMs?: number;
+  /**
+   * v0.18.0 (#28) — opt-in to the pre-v0.18 "don't ding the focused tile"
+   * behavior. Default false: chime always plays on Stop/Notification, even
+   * when the destination tile is focused.
+   */
+  suppressOnFocusedTile?: boolean;
   sounds?: {
     /** @deprecated v0.14 — renamed to `turnDone`. Still read for back-compat. */
     ready?: string | null;
@@ -446,6 +452,9 @@ export class ConfigManager implements vscode.Disposable {
       enabled: raw.enabled === true,
       volume,
       debounceMs,
+      // v0.18.0 (#28) — explicit-true gates the pre-v0.18 "skip on focus"
+      // behavior; default false flips to always-play.
+      suppressOnFocusedTile: raw.suppressOnFocusedTile === true,
       sounds: {
         turnDone: validateSlot(turnDoneRaw),
         midJobPrompt: validateSlot(midJobPromptRaw),
@@ -630,6 +639,21 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   /**
+   * v0.18.0 (#27) — set the `hidden` flag for a config entry. Returns true
+   * when the entry exists (and the flag was applied), false when no such
+   * slug is registered. The synth filter in TerminalTracker drops hidden
+   * entries from the registered-tile zone; live tiles ignore the flag.
+   */
+  setHidden(name: string, hidden: boolean): boolean {
+    const entry = this.config.terminals[name];
+    if (!entry) return false;
+    if (hidden) entry.hidden = true;
+    else delete entry.hidden;
+    this.scheduleSave();
+    return true;
+  }
+
+  /**
    * Assign sequential `order` values to terminals by name. Names not in the
    * list are left with whatever order they already had. Used by drag-and-drop
    * reordering in the webview.
@@ -795,6 +819,10 @@ export class ConfigManager implements vscode.Disposable {
       enabled: rawAudio.enabled === true,
       volume: typeof rawAudio.volume === 'number' ? rawAudio.volume : DEFAULT_AUDIO_VOLUME,
       debounceMs: typeof rawAudio.debounceMs === 'number' ? rawAudio.debounceMs : DEFAULT_AUDIO_DEBOUNCE_MS,
+      // v0.18.0 (#28) — emit only when user explicitly opted in. Absent means
+      // the new default (always play); writing `false` would clutter every
+      // fresh config with a knob most users won't touch.
+      ...(rawAudio.suppressOnFocusedTile === true ? { suppressOnFocusedTile: true } : {}),
       sounds: {
         turnDone: turnDoneSerialized,
         midJobPrompt: (rawSounds.midJobPrompt as string | null | undefined)
@@ -810,7 +838,7 @@ export class ConfigManager implements vscode.Disposable {
       // Carry through unknown top-level audio.* keys.
       ...Object.fromEntries(
         Object.entries(rawAudio).filter(
-          ([k]) => k !== 'enabled' && k !== 'volume' && k !== 'debounceMs' && k !== 'sounds',
+          ([k]) => k !== 'enabled' && k !== 'volume' && k !== 'debounceMs' && k !== 'sounds' && k !== 'suppressOnFocusedTile',
         ),
       ),
     };
@@ -877,6 +905,11 @@ export class ConfigManager implements vscode.Disposable {
       '  // Bundled defaults: `turn-done-default.mp3` (seeded here) and',
       '  // `can-crack.mp3` — filenames resolve from the extension if you',
       '  // haven\'t copied same-named files into ~/.claude/sounds/.',
+      '  //',
+      '  // suppressOnFocusedTile: optional, defaults to false. Set true to',
+      '  // skip the chime when the destination tile is the focused VS Code',
+      '  // terminal (the pre-v0.18 behavior). Default plays everywhere so',
+      '  // eyes-on-editor users don\'t miss turn-done cues.',
       `  "audio": ${indent(JSON.stringify(audio, null, 4), 2)},`,
       '',
       '  // \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510',

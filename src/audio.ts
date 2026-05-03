@@ -15,7 +15,10 @@ import { StateTransition, TransitionListener } from './types';
  * Filtering:
  *   - config.audio.enabled === false → drop
  *   - transition is `ready → ready` (label refresh) → drop
- *   - tile is currently the focused VS Code terminal → drop
+ *   - tile is the focused VS Code terminal AND
+ *     config.audio.suppressOnFocusedTile === true → drop (v0.18.0 #28: the
+ *     suppression default flipped to off so chimes always fire on Stop/
+ *     Notification, even on the focused tile)
  *   - chosen slot has no file configured / file missing → drop + warn-once
  *
  * Debounce: simultaneous transitions on multiple tiles within `debounceMs`
@@ -66,9 +69,13 @@ export class AudioPlayer implements vscode.Disposable {
       return;
     }
 
-    // Focused tile — user is already looking at it. Don't ding themselves.
-    if (t.isActive) {
-      this.log(() => `audio: tile ${t.name} focused, skipping`);
+    // v0.18.0 (#28) — focused-tile suppression is now opt-in. Pre-v0.18 this
+    // unconditionally swallowed chimes when the destination tile was focused;
+    // users with eyes on the editor pane (not the terminal) silently missed
+    // turn-done cues. Default: always play. Flip suppressOnFocusedTile to
+    // true in config to restore the legacy behavior.
+    if (t.isActive && audio.suppressOnFocusedTile) {
+      this.log(() => `audio: tile ${t.name} focused + suppressOnFocusedTile=true, skipping`);
       return;
     }
 

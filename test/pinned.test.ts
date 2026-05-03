@@ -65,6 +65,31 @@ describe('ConfigManager.setPinned', () => {
   });
 });
 
+describe('ConfigManager.setHidden (#27)', () => {
+  it('writes hidden: true when set', () => {
+    writeConfig({ terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.setHidden('a', true)).toBe(true);
+    expect(cm.getTerminal('a')?.hidden).toBe(true);
+    cm.dispose();
+  });
+
+  it('deletes hidden key when set false', () => {
+    writeConfig({ terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, hidden: true } } });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.setHidden('a', false)).toBe(true);
+    expect(cm.getTerminal('a')?.hidden).toBeUndefined();
+    cm.dispose();
+  });
+
+  it('returns false for unknown terminal', () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.setHidden('nope', true)).toBe(false);
+    cm.dispose();
+  });
+});
+
 describe('TerminalTracker.getTiles — pinned zone', () => {
   it('places pinned tiles at the bottom in auto sort mode, regardless of urgency', () => {
     writeConfig({

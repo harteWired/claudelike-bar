@@ -195,11 +195,16 @@ describe('AudioPlayer focus skip', () => {
   let plays: RecordedPlay[];
   let term: any;
 
-  beforeEach(() => {
+  function setup(audioOverrides: Record<string, unknown> = {}) {
     ({ root, configPath, sounds } = setupEnv());
     dropSound(sounds, 'chime.mp3');
     writeConfig(configPath, {
-      audio: { enabled: true, debounceMs: 0, sounds: { ready: 'chime.mp3' } },
+      audio: {
+        enabled: true,
+        debounceMs: 0,
+        sounds: { ready: 'chime.mp3' },
+        ...audioOverrides,
+      },
     });
     term = addTerminal('proj');
     cm = new ConfigManager(configPath);
@@ -207,7 +212,13 @@ describe('AudioPlayer focus skip', () => {
     const rec = makePostTarget();
     plays = rec.plays;
     player = new AudioPlayer(tracker, cm, rec.target, undefined, sounds);
-  });
+  }
+
+  function focusTerm() {
+    (vscode.window as any).activeTerminal = term;
+    const onChange = (vscode.window.onDidChangeActiveTerminal as any).mock.calls[0][0];
+    onChange(term);
+  }
 
   afterEach(() => {
     player.dispose();
@@ -216,18 +227,37 @@ describe('AudioPlayer focus skip', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('tile that is the active terminal does NOT play', async () => {
-    // Mark the terminal active and propagate via the tracker's active-terminal
-    // hook. Order matters: isActive must be true at the moment the ready
-    // transition fires.
-    (vscode.window as any).activeTerminal = term;
-    const onChange = (vscode.window.onDidChangeActiveTerminal as any).mock.calls[0][0];
-    onChange(term);
+  it('tile that is the active terminal DOES play by default (#28 v0.18.0 flip)', async () => {
+    // v0.18.0 (#28): default flipped — chimes fire on the focused tile too
+    // so users with eyes on the editor pane don't miss turn-done cues.
+    setup();
+    focusTerm();
+    tracker.updateStatus('proj', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('proj', 'ready', 'Stop');
+    await new Promise((r) => setTimeout(r, 5));
+    expect(plays.length).toBe(1);
+  });
 
+  it('suppressOnFocusedTile=true restores legacy skip behavior (#28 opt-in)', async () => {
+    // Users who prefer the pre-v0.18 silence-on-focused setting flip the
+    // explicit flag and the focused tile is skipped again.
+    setup({ suppressOnFocusedTile: true });
+    focusTerm();
     tracker.updateStatus('proj', 'working', 'UserPromptSubmit');
     tracker.updateStatus('proj', 'ready', 'Stop');
     await new Promise((r) => setTimeout(r, 5));
     expect(plays.length).toBe(0);
+  });
+
+  it('suppressOnFocusedTile=true does NOT skip when tile is unfocused (#28 control)', async () => {
+    // The flag only acts when the destination tile is the focused terminal.
+    // An unfocused tile still chimes, regardless of the flag's value.
+    setup({ suppressOnFocusedTile: true });
+    // No focusTerm() call — terminal is unfocused.
+    tracker.updateStatus('proj', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('proj', 'ready', 'Stop');
+    await new Promise((r) => setTimeout(r, 5));
+    expect(plays.length).toBe(1);
   });
 });
 

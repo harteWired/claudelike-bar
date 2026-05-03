@@ -506,6 +506,20 @@ function showContextMenu(e, tileId) {
       vscode.postMessage({ type: 'launchByName', name: tile.name });
     });
     menu.appendChild(launchItem);
+
+    // v0.18.0 (#27) \u2014 "Hide from bar" sets `hidden: true` on the config
+    // entry, which suppresses the registered tile in synthesizeRegisteredTiles.
+    // The live tile is unaffected when launched (live entries always render
+    // regardless of `hidden`), so the project remains reachable via palette
+    // / hotkey / autoStart and reappears as a regular tile while running.
+    // Closing the terminal returns it to its hidden offline state. To
+    // un-hide without launching, edit `hidden: false` in the config.
+    menu.appendChild(menuSeparator());
+    const hideItem = menuItem('\uD83D\uDC41', 'Hide from bar', () => {
+      vscode.postMessage({ type: 'hideRegisteredTile', name: tile.name });
+    });
+    menu.appendChild(hideItem);
+
     document.body.appendChild(menu);
     positionAndShowMenu(menu, e);
     return;

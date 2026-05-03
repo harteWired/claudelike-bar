@@ -20,6 +20,7 @@ import { executeDiagnoseCommand, maybeToastDiagnostics } from './diagnostics';
 import { runSetupWizard } from './wizard';
 import { readExtensionVersion, soundsDir } from './claudePaths';
 import { ensureSoundsDirWithReadme } from './soundsReadme';
+import { checkForDuplicateInstall } from './duplicateExtension';
 import * as path from 'path';
 
 const SETUP_PROMPTED_KEY = 'claudelike-bar.setupPrompted';
@@ -34,6 +35,23 @@ const AUTO_START_REVIVE_GRACE_MS = 1200;
 type LogFn = (msg: string | (() => string)) => void;
 
 export function activate(context: vscode.ExtensionContext) {
+  // v0.18.2 (#32) — duplicate-install detection. Fire-and-forget; runs
+  // alongside everything else and surfaces a one-click resolution if both
+  // the Marketplace and Open VSX builds are installed at the same time.
+  // Errors are swallowed inside the helper — a busted detector should
+  // never block the rest of activation.
+  void checkForDuplicateInstall({
+    ownId: context.extension.id,
+    getPeerExtension: (id) => vscode.extensions.getExtension(id),
+    showInformationMessage: (msg, ...actions) =>
+      vscode.window.showInformationMessage(msg, ...actions),
+    uninstall: (id) =>
+      vscode.commands.executeCommand('workbench.extensions.uninstallExtension', id),
+    reload: () => {
+      void vscode.commands.executeCommand('workbench.action.reloadWindow');
+    },
+  });
+
   // v0.14 — wire the bundled-sounds dir so `turn-done-default.mp3` and
   // `can-crack.mp3` resolve without the user copying them into
   // ~/.claude/sounds/. Path is fine to join synchronously — it's only

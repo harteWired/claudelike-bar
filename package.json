@@ -110,6 +110,12 @@
         "category": "Claudelike Bar"
       },
       {
+        "command": "claudeDashboard.organizeProjects",
+        "title": "Organize Projects",
+        "icon": "$(layout)",
+        "category": "Claudelike Bar"
+      },
+      {
         "command": "claudeDashboard.showHooks",
         "title": "Show Me the Hooks (open docs)",
         "category": "Claudelike Bar"
@@ -194,6 +200,11 @@
         },
         {
           "command": "claudeDashboard.registerProject",
+          "when": "view == claudeDashboard.mainView",
+          "group": "navigation"
+        },
+        {
+          "command": "claudeDashboard.organizeProjects",
           "when": "view == claudeDashboard.mainView",
           "group": "navigation"
         },

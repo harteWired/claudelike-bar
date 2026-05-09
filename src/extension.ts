@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { DashboardProvider } from './dashboardProvider';
+import { OrganizerProvider } from './organizerProvider';
 import { TerminalTracker } from './terminalTracker';
 import { StatusWatcher } from './statusWatcher';
 import { ConfigManager } from './configManager';
@@ -89,6 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
   const tracker = new TerminalTracker(configManager, log);
   const watcher = new StatusWatcher();
   const provider = new DashboardProvider(context.extensionUri);
+  const organizer = new OrganizerProvider(context.extensionUri, configManager, tracker);
 
   // Register the webview provider
   const registration = vscode.window.registerWebviewViewProvider(
@@ -130,6 +132,10 @@ export function activate(context: vscode.ExtensionContext) {
   const setupProjectsCmd = vscode.commands.registerCommand(
     'claudeDashboard.setupProjects',
     () => runSetupWizard(configManager, context.extensionPath, (m) => log(m)),
+  );
+  const organizeProjectsCmd = vscode.commands.registerCommand(
+    'claudeDashboard.organizeProjects',
+    () => organizer.show(),
   );
   const showHooksCmd = vscode.commands.registerCommand(
     'claudeDashboard.showHooks',
@@ -557,6 +563,8 @@ export function activate(context: vscode.ExtensionContext) {
     registerProjectCmd,
     launchProjectCmd,
     setupProjectsCmd,
+    organizeProjectsCmd,
+    organizer,
     showHooksCmd,
     removeLegacyHooksCmd,
     diagnoseCmd,

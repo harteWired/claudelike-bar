@@ -1,0 +1,185 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-editor-background);
+  padding: 16px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.organizer-header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.organizer-header .hint {
+  font-size: 12px;
+  color: var(--vscode-descriptionForeground);
+  margin-bottom: 14px;
+  line-height: 1.5;
+}
+
+.lanes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+.lane {
+  display: flex;
+  flex-direction: column;
+  background: var(--vscode-sideBar-background, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--vscode-panel-border);
+  border-radius: 4px;
+  min-height: 0;
+}
+
+.lane > header {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--vscode-editorGroupHeader-tabsBackground, transparent);
+}
+
+.lane-title {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.lane-sub {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.4;
+}
+
+.cards {
+  flex: 1;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 80px;
+}
+
+.cards.empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.cards .empty-msg {
+  color: var(--vscode-descriptionForeground);
+  font-size: 11px;
+  text-align: center;
+  padding: 12px 8px;
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* Drop highlight on droppable lanes only. */
+.cards[data-droppable="true"].drag-over {
+  background: var(--vscode-list-dropBackground, rgba(100, 150, 255, 0.08));
+  outline: 1px dashed var(--vscode-focusBorder);
+  outline-offset: -2px;
+}
+
+/* The passive lane (closed-visible) gets a subtle "no-drop" cursor when
+   something is being dragged over it. We don't outline it — passive means
+   silent reject, not a flashy error. */
+.cards[data-droppable="false"].drag-over {
+  cursor: not-allowed;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--vscode-panel-border);
+  border-left: 4px solid var(--card-color, var(--vscode-panel-border));
+  border-radius: 3px;
+  cursor: grab;
+  font-size: 12px;
+  user-select: none;
+  transition: background 0.12s ease, opacity 0.2s ease;
+}
+
+.card:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+
+.card.dragging {
+  opacity: 0.35;
+  cursor: grabbing;
+}
+
+.card.drop-before {
+  box-shadow: 0 -2px 0 0 var(--vscode-focusBorder);
+}
+
+.card.drop-after {
+  box-shadow: 0 2px 0 0 var(--vscode-focusBorder);
+}
+
+.card .card-icon {
+  font-size: 13px;
+  color: var(--card-color);
+  width: 14px;
+  text-align: center;
+}
+
+.card .card-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card .shell-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--vscode-badge-background);
+  color: var(--vscode-badge-foreground);
+  text-transform: uppercase;
+}
+
+.organizer-footer {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.organizer-footer button {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-button-foreground));
+  background: var(--vscode-button-secondaryBackground, var(--vscode-button-background));
+  border: none;
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.organizer-footer button:hover {
+  background: var(--vscode-button-secondaryHoverBackground, var(--vscode-button-hoverBackground));
+}
+
+.organizer-footer .status {
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}

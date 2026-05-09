@@ -90,6 +90,121 @@ describe('ConfigManager.setHidden (#27)', () => {
   });
 });
 
+describe('ConfigManager.applyOrganizerLayout (tile-organizer panel)', () => {
+  it('pins listed names with sequential order, clears prior pinned/hidden flags', () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, hidden: true },
+        'b': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+        'c': { color: 'cyan', icon: null, nickname: null, autoStart: false, pinned: true, order: 9 },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.applyOrganizerLayout({
+      pinnedOrder: ['b', 'a'],
+      unpinnedNames: ['c'],
+      hiddenNames: [],
+    });
+    expect(cm.getTerminal('b')?.pinned).toBe(true);
+    expect(cm.getTerminal('b')?.order).toBe(0);
+    expect(cm.getTerminal('a')?.pinned).toBe(true);
+    expect(cm.getTerminal('a')?.hidden).toBeUndefined();
+    expect(cm.getTerminal('a')?.order).toBe(1);
+    expect(cm.getTerminal('c')?.pinned).toBeUndefined();
+    expect(cm.getTerminal('c')?.order).toBeUndefined();
+    cm.dispose();
+  });
+
+  it('hidden lane sets hidden:true and clears pinned', () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, pinned: true, order: 0 },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.applyOrganizerLayout({
+      pinnedOrder: [],
+      unpinnedNames: [],
+      hiddenNames: ['a'],
+    });
+    expect(cm.getTerminal('a')?.hidden).toBe(true);
+    expect(cm.getTerminal('a')?.pinned).toBeUndefined();
+    expect(cm.getTerminal('a')?.order).toBeUndefined();
+    cm.dispose();
+  });
+
+  it('unpinned lane clears both pinned and hidden', () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, hidden: true },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.applyOrganizerLayout({
+      pinnedOrder: [],
+      unpinnedNames: ['a'],
+      hiddenNames: [],
+    });
+    expect(cm.getTerminal('a')?.pinned).toBeUndefined();
+    expect(cm.getTerminal('a')?.hidden).toBeUndefined();
+    cm.dispose();
+  });
+
+  it('ignores names that have no matching config entry (defensive)', () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(() => cm.applyOrganizerLayout({
+      pinnedOrder: ['ghost'],
+      unpinnedNames: ['phantom'],
+      hiddenNames: ['void'],
+    })).not.toThrow();
+    cm.dispose();
+  });
+
+  it('rejects reserved property names (no prototype pollution)', () => {
+    writeConfig({
+      terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.applyOrganizerLayout({
+      pinnedOrder: ['__proto__', 'constructor', 'a'],
+      unpinnedNames: ['prototype'],
+      hiddenNames: ['__proto__'],
+    });
+    // Object.prototype must not gain pinned/hidden/order.
+    expect((Object.prototype as { pinned?: unknown }).pinned).toBeUndefined();
+    expect((Object.prototype as { hidden?: unknown }).hidden).toBeUndefined();
+    expect((Object.prototype as { order?: unknown }).order).toBeUndefined();
+    // The legitimate entry still applied — pinned with order=2 because
+    // the two reserved entries ahead of it consumed indices 0 and 1.
+    expect(cm.getTerminal('a')?.pinned).toBe(true);
+    expect(cm.getTerminal('a')?.order).toBe(2);
+    cm.dispose();
+  });
+
+  it("flips sortMode to 'auto' so manual order isn't silently lost", () => {
+    writeConfig({
+      sortMode: 'manual',
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, order: 2 },
+        'b': { color: 'cyan', icon: null, nickname: null, autoStart: false, order: 0 },
+        'c': { color: 'cyan', icon: null, nickname: null, autoStart: false, order: 1 },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.applyOrganizerLayout({
+      pinnedOrder: [],
+      unpinnedNames: ['a', 'b', 'c'],
+      hiddenNames: [],
+    });
+    expect(cm.getSortMode()).toBe('auto');
+    expect(cm.getTerminal('a')?.order).toBeUndefined();
+    expect(cm.getTerminal('b')?.order).toBeUndefined();
+    expect(cm.getTerminal('c')?.order).toBeUndefined();
+    cm.dispose();
+  });
+});
+
 describe('TerminalTracker.getTiles — pinned zone', () => {
   it('places pinned tiles at the bottom in auto sort mode, regardless of urgency', () => {
     writeConfig({

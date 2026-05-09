@@ -177,6 +177,11 @@ const DEFAULT_AUDIO_DEBOUNCE_MS = 150;
 const CONFIG_FILENAME = '.claudelike-bar.jsonc';
 const LEGACY_CONFIG_FILENAME = '.claudelike-bar.json';
 
+// Names that resolve to live prototype objects under bracket-notation
+// lookup. Filtered at any boundary that takes terminal names from a
+// webview/IPC source so writes can't pollute Object.prototype.
+const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 const DEFAULT_LABELS: Record<string, string> = {
   idle: 'Idle',
   working: 'Working',
@@ -684,6 +689,74 @@ export class ConfigManager implements vscode.Disposable {
       if (entry) entry.order = index;
     });
     this.config.sortMode = 'manual';
+    this.scheduleSave();
+  }
+
+  /**
+   * v0.19 — atomic layout write from the tile-organizer panel. The webview
+   * owns the full lane-membership picture; this method just applies it in a
+   * single config write.
+   *
+   *   pinnedOrder    — names with `pinned: true`, in the panel's display order
+   *                    (translates to `order: 0..N-1` within the pinned zone)
+   *   unpinnedNames  — names with `pinned: false, hidden: false`. Covers both
+   *                    "Auto-sort" (running) and "Closed but visible" lanes,
+   *                    which share config state and only differ at runtime.
+   *                    Order isn't persisted — auto-sort is status-driven.
+   *   hiddenNames    — names with `hidden: true`. Order doesn't matter;
+   *                    these tiles don't appear in the bar at all.
+   *
+   * Names not present in any list keep their existing flags (defensive — the
+   * panel is supposed to enumerate everything, but a stale message from a
+   * cached webview shouldn't silently archive tiles).
+   */
+  applyOrganizerLayout(layout: {
+    pinnedOrder: string[];
+    unpinnedNames: string[];
+    hiddenNames: string[];
+  }): void {
+    // Reject reserved property names — the webview is shipped by the
+    // extension today, but bracket-notation lookups on `__proto__` /
+    // `constructor` / `prototype` would return live prototype objects and
+    // turn any future webview message-channel slip into a host-wide
+    // prototype-pollution gadget. Belt-and-braces with hasOwnProperty.call.
+    const lookup = (name: string): TerminalConfig | undefined => {
+      if (RESERVED_KEYS.has(name)) return undefined;
+      if (!Object.prototype.hasOwnProperty.call(this.config.terminals, name)) {
+        return undefined;
+      }
+      return this.config.terminals[name];
+    };
+    // Wipe stale `order` values — pinnedOrder reassigns the only ones we
+    // care about, and unpinned/hidden tiles must not carry orders that the
+    // pinned-zone sort would treat as authoritative.
+    for (const cfg of Object.values(this.config.terminals)) {
+      delete cfg.order;
+    }
+    layout.pinnedOrder.forEach((name, i) => {
+      const e = lookup(name);
+      if (!e) return;
+      e.pinned = true;
+      delete e.hidden;
+      e.order = i;
+    });
+    for (const name of layout.unpinnedNames) {
+      const e = lookup(name);
+      if (!e) continue;
+      delete e.pinned;
+      delete e.hidden;
+    }
+    for (const name of layout.hiddenNames) {
+      const e = lookup(name);
+      if (!e) continue;
+      delete e.pinned;
+      e.hidden = true;
+    }
+    // Flip sortMode to 'auto' so the bar's unpinned-tile order matches what
+    // the panel just showed — wiping `order` on unpinned tiles while
+    // sortMode='manual' would otherwise fall back to lastActivity sort and
+    // silently undo any prior in-bar drag-reorder.
+    this.config.sortMode = 'auto';
     this.scheduleSave();
   }
 

@@ -38,6 +38,56 @@ Counter math from this window alone is balanced (5 Start / 6 Stop → floors at 
 
 ## Feature Requests
 
+### User-configurable focus hotkeys per tile
+**Requested:** 2026-05-09 (Matt)
+
+The `claudeDashboard.focusByName` and `claudeDashboard.focusSlot1..9` commands already exist (#18, shipped v0.16.5) and work — but binding them requires hand-editing `~/.config/Code/User/keybindings.json`, which most users won't do. Want a discoverable path: per-tile hotkey assignment from the config file or a right-click "Set hotkey…" action, plus default bindings out of the box for the slot variants.
+
+**Scope.**
+
+What already exists:
+- `claudeDashboard.focusSlot1..9` — focuses the Nth live tile in current sort order (`extension.ts:196–222`)
+- `claudeDashboard.focusByName` — focuses a tile by displayName / name / projectName, takes a string `args` value (`extension.ts:224–250`)
+- Both commands resolve the underlying `vscode.Terminal` via `tracker.getTerminalById` and call `term.show()`. No UI surface.
+
+What's needed:
+
+1. **Default keybindings for the slot commands.** Ship a `contributes.keybindings` block in `package.json` that binds `Ctrl+Alt+1..9` (Linux/Windows) / `Cmd+Alt+1..9` (macOS) to `focusSlot1..9`. These combos are mostly free — VS Code uses `Ctrl+1..9` for editor groups and `Ctrl+\`+1..9` for terminal switching, but `Ctrl+Alt+1..9` is unclaimed in default bindings as of 1.93. Users can override in their own keybindings.json if they conflict with another extension.
+2. **Per-tile hotkey config field.** Add an optional `hotkey: string` field to `TerminalConfig` (e.g. `"hotkey": "ctrl+alt+a"`). On config load, dynamically register a keybinding via `vscode.commands.executeCommand` + the `setContext` pattern, OR (simpler) maintain a generated keybindings.json snippet the user can copy. Discoverability beats elegance — even a "Copy hotkey JSON" action in the right-click menu is a win.
+3. **Right-click "Set hotkey…" action.** InputBox prompts for a key combo, validates against a small allowlist of safe modifier patterns (see below), writes to the tile's `hotkey` field. Activation reads all `hotkey` fields and registers them. On conflict (same hotkey on two tiles, or hotkey claimed by VS Code), surface a warning toast pointing the user to keybindings.json.
+4. **F-key option.** Plain `F1..F12` in VS Code are mostly reserved (F1=palette, F2=rename, F5=debug, F8=problems, etc.). Modifier+F-key is much safer: `Ctrl+F1..F12`, `Alt+F1..F12`, `Ctrl+Shift+F1..F12` are largely free. Document these as the recommended option for users with >9 tiles or who want non-numeric mnemonic mappings (e.g. F1=api, F2=belfry).
+
+**Modifier collision map** (VS Code 1.93 defaults):
+
+| Combo | Status |
+|---|---|
+| `Ctrl+1..9` | TAKEN — switch editor group |
+| `` Ctrl+`+1..9 `` | TAKEN — switch active terminal |
+| `Ctrl+Alt+1..9` | FREE on Linux/Win; some Mac debug bindings — recommended default |
+| `Ctrl+Shift+1..9` | mostly FREE |
+| `Alt+1..9` | FREE on Linux/Win; menu mnemonics on some platforms |
+| `F1..F12` (plain) | mostly TAKEN |
+| `Ctrl+F1..F12` | mostly FREE |
+| `Alt+F1..F12` | mostly FREE |
+| `Ctrl+Shift+F1..F12` | mostly FREE |
+
+**What's *not* in scope:**
+- Cross-window hotkey routing — focus stays within the current VS Code window. Multi-window users are on their own.
+- Chord shortcuts (e.g. `Ctrl+K Ctrl+1`) — interesting later but the per-tile UX gets harder to validate.
+- Hotkey for non-focus actions (kill, mark-done, etc.) — keep this scoped to the focus use case.
+
+**Effort estimate:** 30–60 minutes for v1.
+- Default `Ctrl+Alt+1..9` keybindings block in package.json: ~5 min
+- Per-tile `hotkey` field + dynamic registration on activation: ~20 min
+- "Set hotkey…" right-click action with validation: ~20 min
+- Docs + collision-map note in README: ~10 min
+
+Risk areas:
+- Dynamic keybinding registration in VS Code: there's no first-class API for this. Workarounds include shipping `when` clauses gated on a context key + maintaining a generated keybindings.json fragment, or simply emitting a "Paste this into your keybindings.json" toast. Pick the cheaper one for v1.
+- Hotkey conflicts that only manifest in specific workspaces (other extensions). Resolution path: document the override pattern (`-claudeDashboard.focusSlot1` to disable) rather than try to detect.
+
+**Open question:** validate `hotkey` strings against VS Code's accelerator grammar at write-time, or accept anything and let the keybinding registration fail silently? The latter is simpler but harder to debug. Lean validation — we already have a small allowlist of safe modifier patterns from the collision map above.
+
 ### Context menu: "Switch to auto sort"
 **Requested:** 2026-04-16 (Matt)
 

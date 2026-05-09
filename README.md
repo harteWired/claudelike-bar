@@ -4,7 +4,7 @@
 
 # claudelike-bar
 
-[![VS Code Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/harteWired.claudelikebar?label=VS%20Code%20Marketplace&color=1e1e2e)](https://marketplace.visualstudio.com/items?itemName=harteWired.claudelikebar)
+[![VS Code Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/harteWired.claudelikebar?label=VS%20Code%20Marketplace&color=1e1e2e)](https://marketplace.visualstudio.com/items?itemName=harteWired.claudelikebar) [![by harteWired](https://img.shields.io/badge/by-harteWired-e6a562?style=flat&labelColor=15151e)](https://github.com/harteWired)
 [![Open VSX Version](https://img.shields.io/open-vsx/v/harteWired/claudelike-bar?label=Open%20VSX&color=1e1e2e)](https://open-vsx.org/extension/harteWired/claudelike-bar)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 

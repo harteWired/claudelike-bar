@@ -19,6 +19,12 @@ const STATUS_FRESH_MS = 60_000;
 // genuinely-stale counter clears within the next attention window.
 const SUBAGENT_WATCHDOG_MS = 60_000;
 
+// v0.19 (#36) — burst window for the "freshly ready" pulse. Long enough to
+// notice across a peripheral glance, short enough to fade before it becomes
+// background noise. Mirrors the audio chime as the canonical "this just
+// finished" cue.
+const FRESHLY_READY_MS = 3_000;
+
 // Status values that mean "Claude is not actively running" — suppression of
 // the registered tile doesn't apply to these. `idle` is included because a
 // fresh idle file just means the hook fired on session start/end; the slug
@@ -62,6 +68,12 @@ export class TerminalTracker implements vscode.Disposable {
   // zero the counter. Catches the in-turn fan-out case the v0.14.1 Stop-
   // reset doesn't cover (long agentic turns that never yield a parent Stop).
   private subagentWatchdogTimers = new Map<number, NodeJS.Timeout>();
+
+  // v0.19 (#36) — per-tile timer that clears the `freshlyReady` flag after
+  // FRESHLY_READY_MS. Cancelled if the tile transitions out of ready before
+  // the timer fires (avoids a spurious "fresh" pulse on a tile that already
+  // moved on).
+  private freshlyReadyTimers = new Map<number, NodeJS.Timeout>();
 
   // Focus tracking: which tile was focused while in "waiting" state
   private focusedWaitingTile: number | null = null;
@@ -568,6 +580,7 @@ export class TerminalTracker implements vscode.Disposable {
             tile.status = 'ready';
             tile.statusLabel = this.configManager.getLabel('ready');
             tile.ignoredText = undefined;
+            this.markFreshlyReady(tile);
             this.startReadyTimer(tile.id);
             changed = true;
           }
@@ -677,6 +690,7 @@ export class TerminalTracker implements vscode.Disposable {
             // the flag was stale). Clear it so it doesn't resurface if the
             // tile later cycles through working again.
             tile.subagentPermissionPending = false;
+            this.markFreshlyReady(tile);
             this.startReadyTimer(tile.id);
             changed = true;
           } else if (tile.statusLabel !== newLabel) {
@@ -863,6 +877,11 @@ export class TerminalTracker implements vscode.Disposable {
       if (changed) {
         tile.lastActivity = Date.now();
         tile.event = event;
+        // v0.19 (#36) — clear fresh-ready on transitions out of ready.
+        // Label-only refreshes (ready → ready) leave both alone.
+        if (prev === 'ready' && tile.status !== 'ready') {
+          this.clearFreshlyReady(tile);
+        }
         this.log(() => `transition ${tile.name}: ${prev} → ${tile.status} (event=${event ?? '-'})`);
         // v0.12 — emit state transition for audio + other downstream
         // consumers. Fires on every status change (not label-only refreshes).
@@ -924,6 +943,44 @@ export class TerminalTracker implements vscode.Disposable {
     if (existing) {
       clearTimeout(existing);
       this.readyTimers.delete(id);
+    }
+  }
+
+  /**
+   * v0.19 (#36) — stamp a tile as just-now-ready. Sets `readyAt` for the
+   * sort comparator (so the tile floats to the top of the ready band) and
+   * `freshlyReady` for the webview's brighter burst pulse. The flag clears
+   * after FRESHLY_READY_MS via a per-tile timer that fires `onChange` so
+   * the webview repaints.
+   */
+  private markFreshlyReady(tile: TileData): void {
+    tile.readyAt = Date.now();
+    tile.freshlyReady = true;
+    const existing = this.freshlyReadyTimers.get(tile.id);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.freshlyReadyTimers.delete(tile.id);
+      const live = this.terminals.get(tile.id);
+      if (!live || !live.freshlyReady) return;
+      live.freshlyReady = false;
+      this.onChangeEmitter.fire();
+    }, FRESHLY_READY_MS);
+    this.freshlyReadyTimers.set(tile.id, timer);
+  }
+
+  /**
+   * v0.19 (#36) — wipe the freshly-ready stamp + cancel the pending decay
+   * timer. Called from the central transition-out-of-ready check so working
+   * / done / error / offline transitions don't leave a stale "fresh" pulse
+   * on a tile that's no longer ready.
+   */
+  private clearFreshlyReady(tile: TileData): void {
+    tile.readyAt = undefined;
+    tile.freshlyReady = false;
+    const existing = this.freshlyReadyTimers.get(tile.id);
+    if (existing) {
+      clearTimeout(existing);
+      this.freshlyReadyTimers.delete(tile.id);
     }
   }
 
@@ -1103,6 +1160,16 @@ export class TerminalTracker implements vscode.Disposable {
       unpinned.sort((a, b) => {
         const orderDiff = (statusOrder[a.status] ?? 5) - (statusOrder[b.status] ?? 5);
         if (orderDiff !== 0) return orderDiff;
+        // v0.19 (#36) — within the ready band, sort by transition-into-ready
+        // time descending so the just-now-ready tile sits at the top. Falls
+        // back to lastActivity for tiles without readyAt (e.g. the
+        // subagentPermissionPending → ready render-only promotion above,
+        // which doesn't go through the ready-transition code path).
+        if (a.status === 'ready' && b.status === 'ready') {
+          const ar = a.readyAt ?? a.lastActivity;
+          const br = b.readyAt ?? b.lastActivity;
+          return br - ar;
+        }
         return b.lastActivity - a.lastActivity;
       });
     }
@@ -1113,14 +1180,14 @@ export class TerminalTracker implements vscode.Disposable {
     const registered = this.configManager.getShowRegisteredProjects()
       ? this.synthesizeRegisteredTiles(new Set(all.map((t) => t.name)))
       : [];
-    registered.sort((a, b) => {
-      const ao = this.configManager.getTerminal(a.name)?.order;
-      const bo = this.configManager.getTerminal(b.name)?.order;
-      if (ao !== undefined && bo !== undefined && ao !== bo) return ao - bo;
-      if (ao !== undefined && bo === undefined) return -1;
-      if (ao === undefined && bo !== undefined) return 1;
-      return a.name.localeCompare(b.name);
-    });
+    // v0.19 (#37) — strict alphabetical by displayName. Registered tiles
+    // aren't drag-reorderable in the bar (only running tiles in manual sort
+    // are), so any `order` field on a registered entry is by definition
+    // stale state from a prior session. displayName (nickname || name)
+    // matches what the user actually sees on the tile.
+    registered.sort((a, b) =>
+      a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }),
+    );
 
     return [...unpinned, ...pinned, ...registered];
   }
@@ -1245,6 +1312,10 @@ export class TerminalTracker implements vscode.Disposable {
       clearTimeout(timer);
     }
     this.subagentWatchdogTimers.clear();
+    for (const timer of this.freshlyReadyTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.freshlyReadyTimers.clear();
     for (const d of this.disposables) d.dispose();
     this.terminals.clear();
     this.terminalRefs.clear();

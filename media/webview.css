@@ -174,6 +174,16 @@ body {
   animation: ready-pulse 2s ease-in-out infinite;
 }
 
+/* v0.19 (#36) — burst pulse for ~3s after a ready transition. Faster
+   animation + glow so the just-finished tile is visually unmissable
+   while the audio chime fires in parallel. Class auto-clears via a
+   tracker-side timer. Doubled selector specificity wins over `.dot.ready`
+   regardless of declaration order. */
+.dot.ready.fresh {
+  animation: ready-pulse-fresh 0.6s ease-in-out 5;
+  box-shadow: 0 0 6px 2px var(--vscode-terminal-ansiCyan);
+}
+
 .dot.waiting {
   background: var(--vscode-terminal-ansiYellow);
   animation: blink 1s step-end infinite;
@@ -245,6 +255,14 @@ body {
 @keyframes ready-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* v0.19 (#36) — sharper, brighter pulse for the 3s burst window after a
+   ready transition. Pairs scale + opacity for a noticeable "thump" that
+   peripheral vision picks up. */
+@keyframes ready-pulse-fresh {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(1.4); }
 }
 
 @keyframes blink {

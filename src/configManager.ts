@@ -75,6 +75,16 @@ export interface TerminalConfig {
    * the bar alongside Claude tiles.
    */
   type?: 'claude' | 'shell';
+  /**
+   * v0.19 (#34) — preferred focus hotkey, in VS Code accelerator syntax
+   * (e.g. "ctrl+alt+a", "shift+f7"). Memo only — the extension does NOT
+   * register this binding directly because VS Code has no first-class API
+   * for dynamic keybinding registration. The "Copy hotkey JSON…" right-
+   * click action uses this value as the suggested key when generating a
+   * keybindings.json snippet for the user to paste. Set via that action
+   * or by hand-editing the config.
+   */
+  hotkey?: string | null;
 }
 
 /**
@@ -641,6 +651,22 @@ export class ConfigManager implements vscode.Disposable {
     if (pinned) entry.pinned = true;
     else delete entry.pinned;
     this.scheduleSave();
+  }
+
+  /**
+   * v0.19 (#34) — record the user's preferred focus hotkey on a tile.
+   * Memo only; VS Code can't dynamically register this. The webview's
+   * "Copy hotkey JSON…" action calls this so the chosen key persists
+   * across sessions for any future copy/paste/audit. Empty / null
+   * clears the field.
+   */
+  setHotkey(name: string, key: string | null): boolean {
+    const entry = this.config.terminals[name];
+    if (!entry) return false;
+    if (key && key.length > 0) entry.hotkey = key;
+    else delete entry.hotkey;
+    this.scheduleSave();
+    return true;
   }
 
   /**

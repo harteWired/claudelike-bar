@@ -478,6 +478,60 @@ export function activate(context: vscode.ExtensionContext) {
           refreshTiles();
         }
         break;
+
+      case 'copyHotkeyJson': {
+        // v0.19 (#34) — generate a keybindings.json snippet for this tile
+        // and put it on the clipboard. VS Code has no first-class dynamic
+        // keybinding API, so paste-into-keybindings.json is the path that
+        // works today. Pre-fills the InputBox with any prior `hotkey` from
+        // config so the user's choice persists across reopens.
+        const tile = tracker.getTiles().find((t) => t.id === message.id);
+        if (!tile) break;
+        const cfg = configManager.getTerminal(tile.name);
+        const focusName = cfg?.projectName ?? tile.displayName ?? tile.name;
+        const previous = (cfg?.hotkey && typeof cfg.hotkey === 'string') ? cfg.hotkey : '';
+        vscode.window.showInputBox({
+          prompt: `Hotkey for "${tile.displayName}" (e.g. ctrl+alt+a, shift+f7)`,
+          value: previous,
+          placeHolder: 'ctrl+alt+a',
+          validateInput: (raw) => {
+            const v = raw.trim();
+            if (v.length === 0) return null;
+            // Loose check — VS Code accepts pretty-much any string and
+            // surfaces its own parse errors at registration time. We only
+            // catch obvious nonsense (bare modifiers, spaces inside keys).
+            if (!/^[a-zA-Z0-9+\- ]+$/.test(v)) {
+              return 'Use VS Code accelerator syntax — modifiers + key separated by "+" (e.g. ctrl+alt+a).';
+            }
+            return null;
+          },
+        }).then((result) => {
+          if (result === undefined) return;          // user cancelled
+          const key = result.trim();
+          if (key.length === 0) {
+            configManager.setHotkey(tile.name, null);
+            vscode.window.showInformationMessage(`Cleared hotkey for "${tile.displayName}".`);
+            return;
+          }
+          configManager.setHotkey(tile.name, key);
+          const snippet = JSON.stringify({
+            command: 'claudeDashboard.focusByName',
+            args: focusName,
+            key,
+          }, null, 2);
+          void vscode.env.clipboard.writeText(snippet + ',');
+          vscode.window.showInformationMessage(
+            `Hotkey snippet copied. Open keybindings.json (Ctrl+Shift+P → "Open Keyboard Shortcuts (JSON)") and paste inside the array.`,
+            'Open keybindings.json',
+          ).then((choice) => {
+            if (choice === 'Open keybindings.json') {
+              void vscode.commands.executeCommand('workbench.action.openGlobalKeybindingsFile');
+            }
+          });
+          log(`copyHotkeyJson ${tile.name}: → "${key}"`);
+        });
+        break;
+      }
     }
   };
 

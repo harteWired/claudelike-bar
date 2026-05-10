@@ -65,6 +65,27 @@ describe('ConfigManager.setPinned', () => {
   });
 });
 
+describe('ConfigManager.setHotkey (#34)', () => {
+  it('writes the hotkey value when set, deletes the field when cleared', () => {
+    writeConfig({
+      terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.setHotkey('a', 'ctrl+alt+a')).toBe(true);
+    expect(cm.getTerminal('a')?.hotkey).toBe('ctrl+alt+a');
+    expect(cm.setHotkey('a', null)).toBe(true);
+    expect(cm.getTerminal('a')?.hotkey).toBeUndefined();
+    cm.dispose();
+  });
+
+  it('returns false for unknown terminal', () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.setHotkey('nope', 'ctrl+alt+a')).toBe(false);
+    cm.dispose();
+  });
+});
+
 describe('ConfigManager.setHidden (#27)', () => {
   it('writes hidden: true when set', () => {
     writeConfig({ terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } } });
@@ -368,6 +389,83 @@ describe('TerminalTracker.getTiles — registered (offline) tiles (#15)', () => 
     const order = tracker.getTiles().map((t) => t.name);
     // live first (unpinned), pinned next, registered last
     expect(order).toEqual(['live', 'pinned-one', 'reg-one']);
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('sorts registered tiles alphabetically by displayName, ignoring stale order field (#37)', () => {
+    writeConfig({
+      terminals: {
+        'zebra':       { color: 'cyan', icon: null, nickname: null, autoStart: false, order: 0 },
+        'alpha-proj':  { color: 'cyan', icon: null, nickname: 'Aardvark', autoStart: false },
+        'middle':      { color: 'cyan', icon: null, nickname: null, autoStart: false, order: 99 },
+      },
+    });
+    // No live VS Code terminals — all three synthesize as registered tiles.
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const order = tracker.getTiles().map((t) => t.displayName);
+    // Aardvark (nickname for alpha-proj) → middle → zebra; the stale
+    // `order: 0` on zebra MUST NOT float it to the top.
+    expect(order).toEqual(['Aardvark', 'middle', 'zebra']);
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('newly-ready tile floats to the top of the ready band (#36)', () => {
+    writeConfig({
+      sortMode: 'auto',
+      terminals: {
+        'old-ready': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+        'new-ready': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    addMockTerminal('old-ready');
+    addMockTerminal('new-ready');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    tracker.updateStatus('old-ready', 'working', 'PreToolUse');
+    tracker.updateStatus('old-ready', 'ready', 'Stop');
+    // Tiny gap so readyAt timestamps differ.
+    const oldReadyAt = tracker.getTiles().find((t) => t.name === 'old-ready')?.readyAt;
+    expect(typeof oldReadyAt).toBe('number');
+    // Force a later timestamp on new-ready by setting Date.now offset.
+    const realNow = Date.now;
+    const offset = (oldReadyAt as number) + 1000;
+    Date.now = () => offset;
+    tracker.updateStatus('new-ready', 'working', 'PreToolUse');
+    tracker.updateStatus('new-ready', 'ready', 'Stop');
+    Date.now = realNow;
+
+    const readyOrder = tracker.getTiles()
+      .filter((t) => t.status === 'ready')
+      .map((t) => t.name);
+    expect(readyOrder).toEqual(['new-ready', 'old-ready']);
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('freshlyReady is set on ready transition and clears when transitioning out (#36)', () => {
+    writeConfig({
+      terminals: { 'p': { color: 'cyan', icon: null, nickname: null, autoStart: false } },
+    });
+    addMockTerminal('p');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    tracker.updateStatus('p', 'working', 'PreToolUse');
+    tracker.updateStatus('p', 'ready', 'Stop');
+    expect(tracker.getTiles().find((t) => t.name === 'p')?.freshlyReady).toBe(true);
+
+    // Transition out of ready clears the flag.
+    tracker.updateStatus('p', 'working', 'PreToolUse');
+    expect(tracker.getTiles().find((t) => t.name === 'p')?.freshlyReady).toBe(false);
+    expect(tracker.getTiles().find((t) => t.name === 'p')?.readyAt).toBeUndefined();
 
     tracker.dispose();
     cm.dispose();

@@ -116,7 +116,45 @@ export class OrganizerProvider implements vscode.Disposable {
       void vscode.commands.executeCommand('claudeDashboard.launchProject');
     } else if (m.type === 'organizer:openConfig') {
       void vscode.commands.executeCommand('claudeDashboard.openConfig');
+    } else if (m.type === 'organizer:closeTerminal') {
+      const payload = msg as { name?: unknown; displayName?: unknown };
+      const name = typeof payload.name === 'string' ? payload.name : undefined;
+      const displayName = typeof payload.displayName === 'string'
+        ? payload.displayName
+        : name;
+      if (name) void this.handleCloseTerminal(name, displayName ?? name);
     }
+  }
+
+  /**
+   * v0.19 (#41) — drop-to-close handler. If the user hasn't opted out of
+   * the confirmation modal, show it with three buttons (Close / Cancel /
+   * Close — don't ask again). On confirm, dispose the live VS Code
+   * terminal; the tile naturally falls back into the "Closed but visible"
+   * lane via the runtime-derivation in postState(). All branches are
+   * idempotent — if the terminal is already gone (race with another close
+   * path), we silently no-op.
+   */
+  private async handleCloseTerminal(name: string, displayName: string): Promise<void> {
+    if (!this.configManager.getConfirmCloseOnDrop()) {
+      this.tracker.closeTerminalByName(name);
+      return;
+    }
+    const CLOSE = 'Close terminal';
+    const CLOSE_DONT_ASK = 'Close, don\'t ask again';
+    const choice = await vscode.window.showWarningMessage(
+      `Close the terminal for "${displayName}"? The tile will remain in the bar as a launcher.`,
+      { modal: true },
+      CLOSE,
+      CLOSE_DONT_ASK,
+    );
+    if (choice === CLOSE_DONT_ASK) {
+      this.configManager.setConfirmCloseOnDrop(false);
+      this.tracker.closeTerminalByName(name);
+    } else if (choice === CLOSE) {
+      this.tracker.closeTerminalByName(name);
+    }
+    // Any other choice (undefined / cancel / Esc) — no-op.
   }
 
   private postState(): void {
@@ -133,6 +171,7 @@ export class OrganizerProvider implements vscode.Disposable {
       themeColor: string;
       icon: string | null;
       isShell: boolean;
+      isLive: boolean;
     };
     const pinned: Array<Card & { order: number }> = [];
     const auto: Card[] = [];
@@ -146,6 +185,7 @@ export class OrganizerProvider implements vscode.Disposable {
         themeColor: getThemeColor(name, typeof cfg.color === 'string' ? cfg.color : undefined),
         icon: cfg.icon ?? null,
         isShell: cfg.type === 'shell',
+        isLive: liveNames.has(name),
       };
       if (cfg.hidden) {
         hidden.push(card);
@@ -205,7 +245,7 @@ export class OrganizerProvider implements vscode.Disposable {
 <body>
   <header class="organizer-header">
     <h1>Organize Claudelike Tiles</h1>
-    <p class="hint">Drag cards between lanes to pin, hide, or unhide tiles. Closed but visible is passive — cards land there automatically when their terminal exits.</p>
+    <p class="hint">Drag cards between lanes to pin, hide, or unhide tiles. Drop a running tile into "Closed but visible" to close its terminal (with confirmation).</p>
   </header>
   <main class="lanes">
     <section class="lane" data-lane="pinned">
@@ -217,8 +257,8 @@ export class OrganizerProvider implements vscode.Disposable {
       <div class="cards" data-droppable="true"></div>
     </section>
     <section class="lane" data-lane="closedVisible">
-      <header><span class="lane-title">Closed but visible</span><span class="lane-sub">Click in the bar to launch — tiles land here when their terminal exits</span></header>
-      <div class="cards" data-droppable="false"></div>
+      <header><span class="lane-title">Closed but visible</span><span class="lane-sub">Click in the bar to launch — drop a running tile here to close it</span></header>
+      <div class="cards" data-droppable="true"></div>
     </section>
     <section class="lane" data-lane="hidden">
       <header><span class="lane-title">Hidden</span><span class="lane-sub">Not shown in the bar — reachable via Launch Project</span></header>

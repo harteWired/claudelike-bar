@@ -1085,6 +1085,25 @@ export class TerminalTracker implements vscode.Disposable {
   }
 
   /**
+   * v0.19 (#41) — close the live VS Code terminal for a tile by name.
+   * Used by the organizer panel's drop-to-close path. Returns true when a
+   * live terminal was found and disposed. The tracker's existing
+   * `onDidCloseTerminal` listener will remove the tile from
+   * `this.terminals` and fire `onChange` as part of normal cleanup, so
+   * the bar refreshes without any extra plumbing here.
+   */
+  closeTerminalByName(name: string): boolean {
+    for (const [id, tile] of this.terminals) {
+      if (tile.name !== name) continue;
+      const term = this.terminalRefs.get(id);
+      if (!term) return false;
+      term.dispose();
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * v0.16.4 (#19) — capture the last user prompt for a tile. Independent
    * of the state machine — no transitions, no label changes, just a
    * persistent string + timestamp on the tile that the webview can
@@ -1123,12 +1142,14 @@ export class TerminalTracker implements vscode.Disposable {
     // clearing logic don't need to change. Cloning the TileData here means
     // the override is render-only — the tracker's live tile state stays
     // authoritative for the state machine.
-    const all = Array.from(this.terminals.values()).map((t) => {
-      if (t.status === 'working' && t.subagentPermissionPending) {
-        return { ...t, status: 'ready' as SessionStatus };
-      }
-      return t;
-    });
+    const all = Array.from(this.terminals.values())
+      .filter((t) => this.configManager.getTerminal(t.name)?.hidden !== true)
+      .map((t) => {
+        if (t.status === 'working' && t.subagentPermissionPending) {
+          return { ...t, status: 'ready' as SessionStatus };
+        }
+        return t;
+      });
     const unpinned = all.filter((t) => !t.pinned);
     const pinned = all.filter((t) => t.pinned);
 

@@ -990,3 +990,151 @@ describe('TerminalTracker.setPinned', () => {
     cm.dispose();
   });
 });
+
+// v0.19 (#39) — live tiles must respect `hidden: true` in the bar render.
+// Pre-fix bug: `getTiles()` filtered `hidden` only for synthesized
+// registered tiles, not for live VS Code terminals — a live pinned tile
+// flipped to hidden kept rendering (just slid down the sort order).
+describe('TerminalTracker.getTiles — hidden filter on live tiles (#39)', () => {
+  it('excludes live tiles whose config has hidden: true', () => {
+    writeConfig({
+      terminals: {
+        'visible': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+        'masked':  { color: 'cyan', icon: null, nickname: null, autoStart: false, hidden: true },
+      },
+    });
+    addMockTerminal('visible');
+    addMockTerminal('masked');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const names = tracker.getTiles().map((t) => t.name);
+    expect(names).toContain('visible');
+    expect(names).not.toContain('masked');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('hidden filter responds to live applyOrganizerLayout flips', () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, pinned: true, order: 0 },
+      },
+    });
+    addMockTerminal('a');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(tracker.getTiles().map((t) => t.name)).toContain('a');
+
+    // Simulate the organizer panel dragging the live pinned tile to Hidden.
+    cm.applyOrganizerLayout({ pinnedOrder: [], unpinnedNames: [], hiddenNames: ['a'] });
+    // Refresh tile-side cached flags from config (extension wires this on
+    // configManager.onChange — done here explicitly for the unit test).
+    tracker.refreshFromConfig();
+
+    expect(tracker.getTiles().map((t) => t.name)).not.toContain('a');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+});
+
+// v0.19 (#40) — applyOrganizerLayout must fire onChange synchronously so
+// the bar's listener can re-render without waiting for the FS round-trip.
+// Pre-fix bug: only `scheduleSave()` was called; the FS-watcher-triggered
+// reload that normally fires onChange is suppressed by `isSaving` during
+// the save window, so listeners often missed the change entirely.
+describe('ConfigManager.applyOrganizerLayout — synchronous onChange (#40)', () => {
+  it('fires onChange immediately after the in-memory mutation', () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, pinned: true, order: 0 },
+      },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    let fires = 0;
+    const sub = cm.onChange(() => { fires += 1; });
+
+    cm.applyOrganizerLayout({ pinnedOrder: [], unpinnedNames: ['a'], hiddenNames: [] });
+
+    expect(fires).toBeGreaterThanOrEqual(1);
+    expect(cm.getTerminal('a')?.pinned).toBeUndefined();
+
+    sub.dispose();
+    cm.dispose();
+  });
+});
+
+// v0.19 (#41) — confirmation preference for drop-to-close.
+describe('ConfigManager.getConfirmCloseOnDrop / setConfirmCloseOnDrop (#41)', () => {
+  it('defaults to true when the field is absent', () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.getConfirmCloseOnDrop()).toBe(true);
+    cm.dispose();
+  });
+
+  it('returns false when explicitly set false ("don\'t ask again")', () => {
+    writeConfig({ confirmCloseOnDrop: false, terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.getConfirmCloseOnDrop()).toBe(false);
+    cm.dispose();
+  });
+
+  it('setConfirmCloseOnDrop(false) persists the override into the JSONC text', () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.setConfirmCloseOnDrop(false);
+    // Force the debounced write through.
+    (cm as unknown as { save: () => void }).save();
+    const onDisk = fs.readFileSync(CONFIG_PATH, 'utf-8');
+    expect(onDisk).toContain('"confirmCloseOnDrop": false');
+    cm.dispose();
+  });
+
+  it("setConfirmCloseOnDrop(true) doesn't bloat the file with the default", () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.setConfirmCloseOnDrop(true);
+    (cm as unknown as { save: () => void }).save();
+    const onDisk = fs.readFileSync(CONFIG_PATH, 'utf-8');
+    expect(onDisk).not.toContain('"confirmCloseOnDrop"');
+    cm.dispose();
+  });
+});
+
+// v0.19 (#41) — drop-to-close: tracker disposes the live VS Code terminal
+// by tile name. The organizer panel routes live-tile-into-closedVisible
+// drops here after the user confirms the modal.
+describe('TerminalTracker.closeTerminalByName (#41)', () => {
+  it('disposes the live terminal and returns true when found', () => {
+    writeConfig({
+      terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } },
+    });
+    const term = addMockTerminal('a');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(tracker.closeTerminalByName('a')).toBe(true);
+    expect(term.dispose).toHaveBeenCalledTimes(1);
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('returns false when no live terminal matches', () => {
+    writeConfig({
+      terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    // 'a' is in config but has no live VS Code terminal (registered only).
+    expect(tracker.closeTerminalByName('a')).toBe(false);
+
+    tracker.dispose();
+    cm.dispose();
+  });
+});

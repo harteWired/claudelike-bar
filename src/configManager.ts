@@ -177,6 +177,14 @@ export interface ConfigFile {
    * by side if both are enabled.
    */
   pushNotifications?: boolean;
+  /**
+   * v0.19 (#41) — when false, the "Close terminal?" confirmation modal
+   * shown after dragging a live tile into the "Closed but visible" lane
+   * is skipped (the terminal is closed immediately). Set by the modal's
+   * "Don't ask again" button. Defaults to true (show modal) — destructive
+   * runtime action shouldn't be silently armed on first install.
+   */
+  confirmCloseOnDrop?: boolean;
   terminals: Record<string, TerminalConfig>;
 }
 
@@ -783,6 +791,12 @@ export class ConfigManager implements vscode.Disposable {
     // sortMode='manual' would otherwise fall back to lastActivity sort and
     // silently undo any prior in-bar drag-reorder.
     this.config.sortMode = 'auto';
+    // Fire onChange synchronously so listeners (bar, organizer) re-render
+    // immediately. The FS-watcher-triggered reload that normally fires
+    // onChange after a save round-trip is suppressed by the isSaving flag
+    // (configManager.ts:378), so without this synchronous fire the bar
+    // never observes pinned/hidden flag flips from drag operations.
+    this.onChangeEmitter.fire();
     this.scheduleSave();
   }
 
@@ -822,6 +836,17 @@ export class ConfigManager implements vscode.Disposable {
 
   getShowRegisteredProjects(): boolean {
     return this.config.showRegisteredProjects !== false;
+  }
+
+  /** v0.19 (#41) — confirmation modal preference for drop-to-close. */
+  getConfirmCloseOnDrop(): boolean {
+    return this.config.confirmCloseOnDrop !== false;
+  }
+
+  setConfirmCloseOnDrop(value: boolean): void {
+    if (this.config.confirmCloseOnDrop === value) return;
+    this.config.confirmCloseOnDrop = value;
+    this.scheduleSave();
   }
 
   private scheduleSave(): void {
@@ -893,6 +918,9 @@ export class ConfigManager implements vscode.Disposable {
     const sortMode = this.getSortMode();
     const claudeCommand = this.config.claudeCommand ?? null;
     const debug = this.config.debug === true;
+    // Emit confirmCloseOnDrop only when the user has explicitly opted out
+    // of the modal (clicked "Don't ask again"). Default true → absent.
+    const confirmCloseOnDropOverride = this.config.confirmCloseOnDrop === false;
     const labels = { ...DEFAULT_LABELS, ...this.config.labels };
     const thresholds = this.getContextThresholds();
     const ignoredTexts = this.getIgnoredTexts();
@@ -978,6 +1006,13 @@ export class ConfigManager implements vscode.Disposable {
       '  // Use this to diagnose stuck tiles or missing status events.',
       `  "debug": ${JSON.stringify(debug)},`,
       '',
+      ...(confirmCloseOnDropOverride ? [
+        '  // Dragging a live tile into the "Closed but visible" lane closes',
+        '  // its terminal. You opted out of the confirmation modal — set this',
+        '  // back to true (or delete the line) to re-enable the prompt.',
+        '  "confirmCloseOnDrop": false,',
+        '',
+      ] : []),
       '  // \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510',
       '  // \u2502  FINE TUNING                                    \u2502',
       '  // \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518',

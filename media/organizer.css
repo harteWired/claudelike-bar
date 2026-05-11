@@ -96,10 +96,10 @@ body {
   outline-offset: -2px;
 }
 
-/* The passive lane (closed-visible) gets a subtle "no-drop" cursor when
-   something is being dragged over it. We don't outline it — passive means
-   silent reject, not a flashy error. */
-.cards[data-droppable="false"].drag-over {
+/* Any lane that rejects the current drop (e.g. closedVisible → auto for a
+   non-live tile) gets a "no-drop" cursor while the cursor hovers over it.
+   The footer status surfaces the reason — see issue #41. */
+.cards.drop-rejected.drag-over {
   cursor: not-allowed;
 }
 

@@ -62,6 +62,15 @@ export function launchRegisteredProject(
     ...(opts.shellArgs ? { shellArgs: opts.shellArgs } : {}),
   });
 
+  // v0.19 (#45) — attach the terminal to the tracker synchronously so the
+  // tile transitions from "registered" → "idle" the instant the launch
+  // resolves, not after VS Code's async onDidOpenTerminal event fires. The
+  // event listener still runs but is idempotent (assignId reuses the id
+  // via WeakMap), so no double-tile. This closes the "offline ghost"
+  // window the user observed when the bar still rendered the registered
+  // (greyed) tile after a drag-launched terminal had already been created.
+  tracker.attachLaunchedTerminal(terminal);
+
   const command = configManager.getAutoStartCommand(name);
   if (command) {
     log(() => `launch: ${name} → ${command}${opts.cwd ? ` [cwd: ${opts.cwd}]` : ''}${opts.shellPath ? ` [shell: ${opts.shellPath}]` : ''}`);

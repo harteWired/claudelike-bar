@@ -90,7 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
   const tracker = new TerminalTracker(configManager, log);
   const watcher = new StatusWatcher();
   const provider = new DashboardProvider(context.extensionUri);
-  const organizer = new OrganizerProvider(context.extensionUri, configManager, tracker);
+  const organizer = new OrganizerProvider(context.extensionUri, configManager, tracker, log);
 
   // Register the webview provider
   const registration = vscode.window.registerWebviewViewProvider(
@@ -128,6 +128,18 @@ export function activate(context: vscode.ExtensionContext) {
   const launchProjectCmd = vscode.commands.registerCommand(
     'claudeDashboard.launchProject',
     () => executeLaunchProjectCommand(configManager, tracker, (m) => log(m)),
+  );
+  // v0.19 (#44) — name-targeted launch. The organizer panel dispatches
+  // this for each tile its drop pulled from the closed lane into an
+  // active lane; the bar's existing `launchByName` webview message also
+  // routes through this command path.
+  const launchByNameCmd = vscode.commands.registerCommand(
+    'claudeDashboard.launchByName',
+    (name: unknown) => {
+      if (typeof name !== 'string') return;
+      if (!configManager.hasTerminal(name)) return;
+      launchRegisteredProject(configManager, tracker, name, (m) => log(m));
+    },
   );
   const setupProjectsCmd = vscode.commands.registerCommand(
     'claudeDashboard.setupProjects',
@@ -583,6 +595,32 @@ export function activate(context: vscode.ExtensionContext) {
     });
   });
 
+  // v0.19 (#48) — first-auto-unpin toast. Fires at most once per workspace:
+  // after the user clicks "Don't show again", `seenPinClearedNotice` flips
+  // to true in config and this listener short-circuits forever after. The
+  // toast is non-modal — VS Code parks it in the bottom-right; users who
+  // never interact still get the auto-unpin behavior without UI blocking.
+  // Lives here (not in TerminalTracker) so the state machine stays free of
+  // user-facing notification concerns — tracker just fires the event.
+  const pinClearedSub = tracker.onPinCleared(({ displayName }) => {
+    if (configManager.getSeenPinClearedNotice()) return;
+    const DONT_SHOW = "Don't show again";
+    const OPEN_CONFIG = 'Open config';
+    void Promise.resolve(
+      vscode.window.showInformationMessage(
+        `Pin removed for "${displayName}" because its terminal closed. Use autoStart to keep it pinned across restarts.`,
+        DONT_SHOW,
+        OPEN_CONFIG,
+      ),
+    ).then((choice) => {
+      if (choice === DONT_SHOW) {
+        configManager.setSeenPinClearedNotice(true);
+      } else if (choice === OPEN_CONFIG) {
+        void vscode.commands.executeCommand('claudeDashboard.openConfig');
+      }
+    });
+  });
+
   // Refresh tiles when config file changes (color/nickname/mode edits).
   // The AudioPlayer's warn-once memory is also cleared so a file the user
   // just dropped in gets a fresh chance to be picked up.
@@ -616,6 +654,7 @@ export function activate(context: vscode.ExtensionContext) {
     restoreStatuslineCmd,
     registerProjectCmd,
     launchProjectCmd,
+    launchByNameCmd,
     setupProjectsCmd,
     organizeProjectsCmd,
     organizer,
@@ -633,6 +672,7 @@ export function activate(context: vscode.ExtensionContext) {
     configSub,
     audioPlayer,
     pushSub,
+    pinClearedSub,
     output,
     timerDisposable,
   );

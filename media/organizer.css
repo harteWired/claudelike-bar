@@ -96,13 +96,6 @@ body {
   outline-offset: -2px;
 }
 
-/* Any lane that rejects the current drop (e.g. closedVisible → auto for a
-   non-live tile) gets a "no-drop" cursor while the cursor hovers over it.
-   The footer status surfaces the reason — see issue #41. */
-.cards.drop-rejected.drag-over {
-  cursor: not-allowed;
-}
-
 .card {
   display: flex;
   align-items: center;
@@ -156,6 +149,27 @@ body {
   background: var(--vscode-badge-background);
   color: var(--vscode-badge-foreground);
   text-transform: uppercase;
+}
+
+/* v0.19 (#49) — runtime status dot on every card. Live = green; closed =
+   neutral grey. Renders to the right of the name, before any other badge.
+   The dot makes the runtime axis visible so users see, before dragging,
+   which axis a drop will cross (config-only vs runtime-mutating). */
+.card .live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+
+.card .live-dot.live {
+  background: var(--vscode-testing-iconPassed, #4ec9b0);
+  box-shadow: 0 0 0 1px var(--vscode-editor-background) inset;
+}
+
+.card .live-dot.closed {
+  background: var(--vscode-descriptionForeground);
+  opacity: 0.45;
 }
 
 .organizer-footer {

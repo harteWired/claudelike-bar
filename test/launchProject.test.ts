@@ -152,6 +152,29 @@ describe('launchProject', () => {
       expect(calls[0].shellPath).toBeUndefined();
       expect(calls[0].shellArgs).toBeUndefined();
     });
+
+    // v0.19 (#45) — close the "offline ghost" window by attaching the
+    // freshly-launched terminal to the tracker synchronously, before VS
+    // Code's async onDidOpenTerminal event fires. The tile must render as
+    // idle (live) the instant the launch returns.
+    it('attaches the newly-launched terminal to the tracker synchronously', () => {
+      writeConfig({
+        terminals: {
+          'fresh': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+        },
+      });
+      captureCreateTerminalCalls();
+      makeCm();
+
+      // Before launch: no live tile for 'fresh'.
+      expect(tracker.getTiles().find((t) => t.name === 'fresh' && t.status !== 'registered')).toBeUndefined();
+
+      launchRegisteredProject(cm, tracker, 'fresh', noopLog);
+
+      // After launch (synchronously, no event needed): live tile with idle.
+      const tile = tracker.getTiles().find((t) => t.name === 'fresh');
+      expect(tile?.status).toBe('idle');
+    });
   });
 
   // ─── buildLaunchCandidates ──────────────────────────────────────────

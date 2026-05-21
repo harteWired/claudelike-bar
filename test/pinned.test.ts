@@ -78,6 +78,25 @@ describe('ConfigManager.setHotkey (#34)', () => {
     cm.dispose();
   });
 
+  // v0.19 — untested element §1 from the 0.19.0 plan. The hotkey field is
+  // not explicitly emitted by `generateConfigText` but rides along through
+  // JSON.stringify of the terminals block. Prove it survives a save→read
+  // round-trip without dropping silently on the next config rewrite.
+  it('hotkey survives a save → reload round-trip through generateConfigText', () => {
+    writeConfig({
+      terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } },
+    });
+    const cm1 = new ConfigManager(CONFIG_PATH);
+    cm1.setHotkey('a', 'ctrl+alt+a');
+    (cm1 as unknown as { save: () => void }).save();
+    cm1.dispose();
+
+    // Fresh ConfigManager re-reads the file — proves the value persisted.
+    const cm2 = new ConfigManager(CONFIG_PATH);
+    expect(cm2.getTerminal('a')?.hotkey).toBe('ctrl+alt+a');
+    cm2.dispose();
+  });
+
   it('returns false for unknown terminal', () => {
     writeConfig({ terminals: {} });
     const cm = new ConfigManager(CONFIG_PATH);
@@ -1103,6 +1122,21 @@ describe('ConfigManager.getConfirmCloseOnDrop / setConfirmCloseOnDrop (#41)', ()
     expect(onDisk).not.toContain('"confirmCloseOnDrop"');
     cm.dispose();
   });
+
+  // v0.19 — untested element §2 from the 0.19.0 plan. The setter test
+  // above covers the write half; this one covers the read-back half via a
+  // fresh ConfigManager instance reading the just-saved file.
+  it('confirmCloseOnDrop survives a save → reload round-trip', () => {
+    writeConfig({ terminals: {} });
+    const cm1 = new ConfigManager(CONFIG_PATH);
+    cm1.setConfirmCloseOnDrop(false);
+    (cm1 as unknown as { save: () => void }).save();
+    cm1.dispose();
+
+    const cm2 = new ConfigManager(CONFIG_PATH);
+    expect(cm2.getConfirmCloseOnDrop()).toBe(false);
+    cm2.dispose();
+  });
 });
 
 // v0.19 (#41) — drop-to-close: tracker disposes the live VS Code terminal
@@ -1133,6 +1167,198 @@ describe('TerminalTracker.closeTerminalByName (#41)', () => {
 
     // 'a' is in config but has no live VS Code terminal (registered only).
     expect(tracker.closeTerminalByName('a')).toBe(false);
+
+    tracker.dispose();
+    cm.dispose();
+  });
+});
+
+// v0.19 (#48) — pinned-closed policy. When a pinned tile's terminal exits,
+// the pin auto-clears (so the tile lands cleanly in Closed-but-visible)
+// and the tracker fires `onPinCleared` so the UI layer can show the
+// first-auto-unpin toast. Tracker stays free of vscode.window calls.
+describe('TerminalTracker pinned-closed policy (#48)', () => {
+  it('auto-clears pinned when the terminal for a pinned tile closes', () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, pinned: true },
+      },
+    });
+    const term = addMockTerminal('a');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(cm.getTerminal('a')?.pinned).toBe(true);
+
+    // Simulate VS Code firing onDidCloseTerminal — handler is the public
+    // method so we don't need the mock to capture the listener callback.
+    tracker.handleTerminalClosed(term as unknown as any);
+
+    expect(cm.getTerminal('a')?.pinned).toBeUndefined();
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it("does not fire onPinCleared when the closed terminal wasn't pinned", () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+      },
+    });
+    const term = addMockTerminal('a');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const events: Array<{ name: string; displayName: string }> = [];
+    tracker.onPinCleared((evt) => events.push(evt));
+
+    tracker.handleTerminalClosed(term as unknown as any);
+
+    expect(events).toHaveLength(0);
+    expect(cm.getTerminal('a')?.pinned).toBeUndefined();
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('fires onPinCleared with name + displayName when a pinned tile closes', () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: 'Aleph', autoStart: false, pinned: true },
+      },
+    });
+    const term = addMockTerminal('a');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const events: Array<{ name: string; displayName: string }> = [];
+    tracker.onPinCleared((evt) => events.push(evt));
+
+    tracker.handleTerminalClosed(term as unknown as any);
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toEqual({ name: 'a', displayName: 'Aleph' });
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('falls back to name as displayName when no nickname is set', () => {
+    writeConfig({
+      terminals: {
+        'a': { color: 'cyan', icon: null, nickname: null, autoStart: false, pinned: true },
+      },
+    });
+    const term = addMockTerminal('a');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const events: Array<{ name: string; displayName: string }> = [];
+    tracker.onPinCleared((evt) => events.push(evt));
+
+    tracker.handleTerminalClosed(term as unknown as any);
+
+    expect(events).toHaveLength(1);
+    expect(events[0].displayName).toBe('a');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+});
+
+// v0.19 (#48) — round-trip persistence for the dismissal flag.
+describe('ConfigManager.seenPinClearedNotice persistence (#48)', () => {
+  it('reads back as true when set in config', () => {
+    writeConfig({ seenPinClearedNotice: true, terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.getSeenPinClearedNotice()).toBe(true);
+    cm.dispose();
+  });
+
+  it('defaults to false when absent', () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    expect(cm.getSeenPinClearedNotice()).toBe(false);
+    cm.dispose();
+  });
+
+  it('emits the override comment when true', () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.setSeenPinClearedNotice(true);
+    (cm as unknown as { save: () => void }).save();
+    const onDisk = fs.readFileSync(CONFIG_PATH, 'utf-8');
+    expect(onDisk).toContain('"seenPinClearedNotice": true');
+    cm.dispose();
+  });
+
+  it("does not bloat the file with the default when false", () => {
+    writeConfig({ terminals: {} });
+    const cm = new ConfigManager(CONFIG_PATH);
+    cm.setSeenPinClearedNotice(false);
+    (cm as unknown as { save: () => void }).save();
+    const onDisk = fs.readFileSync(CONFIG_PATH, 'utf-8');
+    expect(onDisk).not.toContain('seenPinClearedNotice');
+    cm.dispose();
+  });
+});
+
+// v0.19 (#45) — attachLaunchedTerminal closes the "offline ghost" window
+// between createTerminal() and the asynchronous onDidOpenTerminal event.
+// The tile must be in the tracker map immediately so the bar's next render
+// shows the live tile (idle) instead of the registered (greyed) tile.
+describe('TerminalTracker.attachLaunchedTerminal (#45)', () => {
+  it('synchronously registers a freshly-launched terminal as a live tile', () => {
+    writeConfig({
+      terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    // Before attach: tile is in config but not in the live tracker map.
+    expect(tracker.getTiles().find((t) => t.name === 'a' && t.status !== 'registered')).toBeUndefined();
+
+    const term = { name: 'a', sendText: vi.fn(), dispose: vi.fn() };
+    (vscode.window.terminals as any[]).push(term);
+    tracker.attachLaunchedTerminal(term as unknown as any);
+
+    // After attach: tile exists with a non-registered status (idle), not offline.
+    const tile = tracker.getTiles().find((t) => t.name === 'a');
+    expect(tile).toBeDefined();
+    expect(tile?.status).toBe('idle');
+    expect(tile?.status).not.toBe('offline');
+    expect(tile?.status).not.toBe('registered');
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('is idempotent — a follow-up onDidOpenTerminal-equivalent does not reset tile state', () => {
+    writeConfig({
+      terminals: { 'a': { color: 'cyan', icon: null, nickname: null, autoStart: false } },
+    });
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const term = { name: 'a', sendText: vi.fn(), dispose: vi.fn() };
+    (vscode.window.terminals as any[]).push(term);
+    tracker.attachLaunchedTerminal(term as unknown as any);
+
+    // Mutate the tile to a non-default status to prove the second call doesn't clobber.
+    const tile = tracker.getTiles().find((t) => t.name === 'a');
+    expect(tile).toBeDefined();
+    const trackerAny = tracker as unknown as { terminals: Map<number, any>; terminalIdMap: WeakMap<any, number> };
+    const id = trackerAny.terminalIdMap.get(term);
+    expect(id).toBeDefined();
+    trackerAny.terminals.get(id!).status = 'working';
+    trackerAny.terminals.get(id!).statusLabel = 'Working';
+
+    // Second attach: should NOT reset back to idle.
+    tracker.attachLaunchedTerminal(term as unknown as any);
+
+    const after = tracker.getTiles().find((t) => t.name === 'a');
+    expect(after?.status).toBe('working');
 
     tracker.dispose();
     cm.dispose();

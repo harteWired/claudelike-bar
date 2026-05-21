@@ -52,6 +52,16 @@ export class TerminalTracker implements vscode.Disposable {
   // and doesn't carry transition detail.
   private onStateChangeEmitter = new vscode.EventEmitter<StateTransition>();
   readonly onStateChange = this.onStateChangeEmitter.event;
+
+  // v0.19 (#48) — fires when a pinned tile's terminal closes and the pin
+  // is auto-cleared. Consumed by the UI layer (extension.ts) to show the
+  // first-auto-unpin toast; this keeps user-facing notification concerns
+  // out of the state machine.
+  private onPinClearedEmitter = new vscode.EventEmitter<{
+    name: string;
+    displayName: string;
+  }>();
+  readonly onPinCleared = this.onPinClearedEmitter.event;
   private nameRefreshTimer: ReturnType<typeof setInterval> | undefined;
   private nameRefreshIdleCycles = 0;
   private configManager: ConfigManager;
@@ -103,16 +113,14 @@ export class TerminalTracker implements vscode.Disposable {
         this.startNameRefresh(); // restart polling on new terminal
         this.onChangeEmitter.fire();
       }),
-      vscode.window.onDidCloseTerminal((t) => {
-        this.removeTerminal(t);
-        this.onChangeEmitter.fire();
-      }),
+      vscode.window.onDidCloseTerminal((t) => this.handleTerminalClosed(t)),
       vscode.window.onDidChangeActiveTerminal((active) => {
         this.handleActiveTerminalChange(active);
         this.onChangeEmitter.fire();
       }),
       this.onChangeEmitter,
       this.onStateChangeEmitter,
+      this.onPinClearedEmitter,
     );
 
     // Periodically refresh terminal names — catches late profile name assignment
@@ -122,6 +130,16 @@ export class TerminalTracker implements vscode.Disposable {
   private addTerminal(terminal: vscode.Terminal): void {
     const name = terminal.name;
     if (name === 'bash' || name === 'zsh' || name === 'sh') return;
+
+    // v0.19 (#45) — idempotent. attachLaunchedTerminal() pre-attaches the
+    // terminal so the tile exists before VS Code's onDidOpenTerminal event
+    // fires. When the event then arrives, the second addTerminal call here
+    // would otherwise overwrite the tile's state machine with a fresh
+    // 'idle' entry. Bail early if the terminal is already tracked.
+    const existingId = this.terminalIdMap.get(terminal);
+    if (existingId !== undefined && this.terminals.has(existingId)) {
+      return;
+    }
 
     // v0.15.0 (#17) — VS Code "Clone terminal" produces `<parent> (copy)`
     // names. Don't write these to config: they're transient, and persisting
@@ -1081,6 +1099,57 @@ export class TerminalTracker implements vscode.Disposable {
     if (!tile) return;
     this.configManager.setPinned(tile.name, pinned);
     tile.pinned = pinned;
+    this.onChangeEmitter.fire();
+  }
+
+  /**
+   * v0.19 (#48) — handle a VS Code terminal close event. Public so tests
+   * can invoke it directly (the vscode mock's onDidCloseTerminal stub
+   * doesn't capture callbacks). Production code wires this in the
+   * constructor's onDidCloseTerminal listener.
+   *
+   * Behavior: capture pinned state BEFORE removing the tile, then if the
+   * tile was pinned, auto-clear the pin in config and fire the one-time
+   * notice. Pinning is a statement about an active terminal slot — a
+   * terminal exit therefore clears the pin so the tile lands cleanly in
+   * Closed-but-visible. For pin-across-restart, users set `autoStart: true`.
+   */
+  handleTerminalClosed(t: vscode.Terminal): void {
+    const id = this.terminalIdMap.get(t);
+    const tile = id !== undefined ? this.terminals.get(id) : undefined;
+    const cfg = tile ? this.configManager.getTerminal(tile.name) : undefined;
+    const wasPinned = cfg?.pinned === true;
+    const closedName = tile?.name;
+    const closedDisplay = tile?.displayName ?? closedName;
+    this.removeTerminal(t);
+    if (wasPinned && closedName) {
+      this.configManager.setPinned(closedName, false);
+      // v0.19 (#48) — fire onPinCleared so the UI layer (extension.ts)
+      // can show the first-auto-unpin toast. Keeping vscode.window calls
+      // out of the state machine — tracker stays a pure state machine,
+      // UI lives where the rest of the toasts do.
+      this.log(() => `pin-cleared event fired for ${closedName}`);
+      this.onPinClearedEmitter.fire({
+        name: closedName,
+        displayName: closedDisplay ?? closedName,
+      });
+    }
+    this.onChangeEmitter.fire();
+  }
+
+  /**
+   * v0.19 (#45) — attach a freshly-launched terminal synchronously so the
+   * tile is in the tracker map BEFORE the bar's next render. VS Code's
+   * `onDidOpenTerminal` event fires asynchronously after `createTerminal`
+   * returns; until it does, the registered (offline-looking) tile is what
+   * the bar renders. Calling this method from the launch path closes that
+   * gap — the live tile exists at status='idle' the instant the launch
+   * resolves, and the later `onDidOpenTerminal` is idempotent (same id via
+   * the WeakMap, same status — fired re-fire is harmless).
+   */
+  attachLaunchedTerminal(terminal: vscode.Terminal): void {
+    this.addTerminal(terminal);
+    this.startNameRefresh();
     this.onChangeEmitter.fire();
   }
 

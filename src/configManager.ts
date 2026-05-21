@@ -185,6 +185,14 @@ export interface ConfigFile {
    * runtime action shouldn't be silently armed on first install.
    */
   confirmCloseOnDrop?: boolean;
+  /**
+   * v0.19 (#48) — set true after the user has seen and dismissed the
+   * one-time toast that fires the first time a pinned tile's terminal
+   * exits and the pin is auto-cleared. Capped at one notification per
+   * workspace, ever — once flipped to true, the toast never fires again.
+   * Default false (toast still pending).
+   */
+  seenPinClearedNotice?: boolean;
   terminals: Record<string, TerminalConfig>;
 }
 
@@ -838,6 +846,18 @@ export class ConfigManager implements vscode.Disposable {
     return this.config.showRegisteredProjects !== false;
   }
 
+  /**
+   * v0.19 — prototype-pollution-safe membership check. Plain
+   * `getTerminal('__proto__')` would return `Object.prototype`, so a
+   * webview message containing reserved keys could appear to refer to a
+   * valid entry. Use this anywhere an IPC-boundary name needs to be
+   * vetted before downstream operations (e.g. `launchRegisteredProject`).
+   */
+  hasTerminal(name: string): boolean {
+    if (RESERVED_KEYS.has(name)) return false;
+    return Object.prototype.hasOwnProperty.call(this.config.terminals, name);
+  }
+
   /** v0.19 (#41) — confirmation modal preference for drop-to-close. */
   getConfirmCloseOnDrop(): boolean {
     return this.config.confirmCloseOnDrop !== false;
@@ -846,6 +866,18 @@ export class ConfigManager implements vscode.Disposable {
   setConfirmCloseOnDrop(value: boolean): void {
     if (this.config.confirmCloseOnDrop === value) return;
     this.config.confirmCloseOnDrop = value;
+    this.scheduleSave();
+  }
+
+  /** v0.19 (#48) — true once the first-auto-unpin toast has been dismissed. */
+  getSeenPinClearedNotice(): boolean {
+    return this.config.seenPinClearedNotice === true;
+  }
+
+  setSeenPinClearedNotice(value: boolean): void {
+    if (this.config.seenPinClearedNotice === value) return;
+    if (value) this.config.seenPinClearedNotice = true;
+    else delete this.config.seenPinClearedNotice;
     this.scheduleSave();
   }
 
@@ -921,6 +953,9 @@ export class ConfigManager implements vscode.Disposable {
     // Emit confirmCloseOnDrop only when the user has explicitly opted out
     // of the modal (clicked "Don't ask again"). Default true → absent.
     const confirmCloseOnDropOverride = this.config.confirmCloseOnDrop === false;
+    // Emit seenPinClearedNotice only when the user has dismissed the toast
+    // (clicked "Don't show again"). Default false → absent.
+    const seenPinClearedNoticeOverride = this.config.seenPinClearedNotice === true;
     const labels = { ...DEFAULT_LABELS, ...this.config.labels };
     const thresholds = this.getContextThresholds();
     const ignoredTexts = this.getIgnoredTexts();
@@ -1011,6 +1046,12 @@ export class ConfigManager implements vscode.Disposable {
         '  // its terminal. You opted out of the confirmation modal — set this',
         '  // back to true (or delete the line) to re-enable the prompt.',
         '  "confirmCloseOnDrop": false,',
+        '',
+      ] : []),
+      ...(seenPinClearedNoticeOverride ? [
+        '  // The one-time toast about pin-clearing-on-terminal-exit was',
+        '  // dismissed. Delete this line (or set to false) to see it again.',
+        '  "seenPinClearedNotice": true,',
         '',
       ] : []),
       '  // \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510',

@@ -21,23 +21,63 @@
     hidden: true,
   };
 
-  // closedVisible → auto is a no-op at the config layer (both lanes share
-  // `pinned:false, hidden:false`; the only difference is runtime liveness).
-  // Without this guard the drop appears to succeed then snaps back when the
-  // next state push re-derives the lane from `liveNames` — see issue #38.
+  // v0.19 (#47) — under the target-state model (#46), every cross-lane drop
+  // is meaningful. The destination's runtime requirement (live vs closed)
+  // determines whether the drop also triggers a launch (#44) or a close
+  // (#41); the config flip happens regardless. The earlier blanket
+  // rejection on `closedVisible → auto` (#38) was the symptom of trying to
+  // suppress a runtime-required drop instead of executing it — it now
+  // launches the terminal, satisfying Auto-sort's "live tiles only" rule.
+  //
+  // The only invalid drop is one whose destination isn't a real lane
+  // (defensive against a future fifth lane key arriving in a stale state).
   function isDropAllowed(srcLane, dstLane) {
     if (!DROPPABLE[dstLane]) return false;
-    if (srcLane === 'closedVisible' && dstLane === 'auto') return false;
+    // Same lane + no position metadata = nothing-to-do drops (the in-lane
+    // reorder handler already short-circuits the "drop on self" case via
+    // moveCard's position.relative === name check).
+    if (srcLane === dstLane) return true;
     return true;
   }
 
-  // Plain-language reason for a rejected drop — surfaced in the footer
-  // status so the user knows *why* nothing happened (issue #41).
-  function rejectionReason(srcLane, dstLane) {
-    if (srcLane === 'closedVisible' && dstLane === 'auto') {
-      return 'Auto-sort shows running tiles only — launch the tile to move it here.';
+  // v0.19 (#49) — drop-preview footer copy. Pure function so behavior is
+  // self-evident and the table reads as a spec: source lane × destination
+  // lane × runtime liveness → terse verb-and-name announcement of what
+  // the drop will do. Returns null when the drop is a no-op (same lane,
+  // same position) — the footer stays empty.
+  //
+  // Terse over descriptive per the 0.19.0 plan: "Launch X" reads at a
+  // glance while dragging, where "Drop here to launch project X" is
+  // visual noise once the convention is known.
+  function dropPreview(srcLane, dstLane, srcIsLive, name) {
+    if (!srcLane || !dstLane || !name) return null;
+    if (srcLane === dstLane) return null;
+    if (dstLane === 'pinned') {
+      if (srcLane === 'hidden') return srcIsLive ? `Unhide + pin ${name}` : `Unhide + launch + pin ${name}`;
+      if (srcLane === 'closedVisible') return `Launch + pin ${name}`;
+      return `Pin ${name}`;
+    }
+    if (dstLane === 'auto') {
+      if (srcLane === 'hidden') return srcIsLive ? `Unhide ${name}` : `Unhide + launch ${name}`;
+      if (srcLane === 'closedVisible') return `Launch ${name}`;
+      if (srcLane === 'pinned') return `Unpin ${name}`;
+      return null;
+    }
+    if (dstLane === 'closedVisible') {
+      if (srcIsLive) return `Close ${name}`;
+      if (srcLane === 'pinned') return `Unpin ${name}`;
+      if (srcLane === 'hidden') return `Unhide ${name}`;
+      return null;
+    }
+    if (dstLane === 'hidden') {
+      return `Hide ${name}`;
     }
     return null;
+  }
+  // Exported on globalThis for the syntax-guard / future unit access.
+  // Webview script is an IIFE; this is the only escape hatch.
+  if (typeof globalThis !== 'undefined') {
+    globalThis.__organizerDropPreview = dropPreview;
   }
 
   let state = {
@@ -55,9 +95,14 @@
   // Most recent organizer:state message arrived during a drag — applied in
   // dragend so the in-flight drop isn't clobbered by a mid-drag rebuild.
   let pendingState = null;
-  // True while the footer shows a drop-rejection reason — cleared on
-  // dragend if the drop didn't land somewhere successful (issue #41).
-  let rejectionShown = false;
+  // v0.19 (#49) — true while the footer shows a drop-preview message
+  // (e.g. "Launch foo"). Cleared on dragend / dragleave / successful drop.
+  let previewShown = false;
+  // v0.19 — cache of the preview string most recently rendered to the
+  // footer. The lane-level dragover handler fires at ~60fps; without this
+  // guard each frame would burn a setStatus() DOM write and a template-
+  // literal allocation even though the action text hasn't changed.
+  let lastPreview = null;
 
   function laneEl(key) {
     return document.querySelector(`.lane[data-lane="${key}"] .cards`);
@@ -114,6 +159,14 @@
       : `${card.displayName} (${card.name})`;
     el.appendChild(name);
 
+    // v0.19 (#49) — runtime status dot. Green when the terminal is live,
+    // grey when closed. Renders on every card so users see the runtime
+    // axis at a glance, before deciding to drag.
+    const dot = document.createElement('span');
+    dot.className = `live-dot ${card.isLive ? 'live' : 'closed'}`;
+    dot.title = card.isLive ? 'Terminal running' : 'Terminal closed';
+    el.appendChild(dot);
+
     if (card.isShell) {
       const tag = document.createElement('span');
       tag.className = 'shell-tag';
@@ -122,7 +175,15 @@
     }
 
     el.addEventListener('dragstart', (e) => {
-      dragSrc = { name: card.name, lane };
+      // v0.19 (#49) — carry the runtime liveness + display name so the
+      // drop-preview footer can announce what each drop will do without
+      // re-finding the card on every dragover.
+      dragSrc = {
+        name: card.name,
+        lane,
+        isLive: !!card.isLive,
+        displayName: card.displayName,
+      };
       el.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
       // setData is required for drag to fire in some browsers/webviews.
@@ -136,14 +197,17 @@
         currentDropTarget.classList.remove('drop-before', 'drop-after');
         currentDropTarget = null;
       }
-      document.querySelectorAll('.cards.drag-over, .cards.drop-rejected')
-        .forEach((c) => c.classList.remove('drag-over', 'drop-rejected'));
-      // Clear a lingering rejection-reason status if the drop didn't land
-      // somewhere successful (a successful drop replaces it with 'Saved.').
-      if (rejectionShown) {
+      document.querySelectorAll('.cards.drag-over')
+        .forEach((c) => c.classList.remove('drag-over'));
+      // Clear a lingering drop-preview status when the drop ends without
+      // landing on a target (drop on an invalid spot, Escape, etc.). A
+      // successful drop replaces it with 'Saved.' or 'Launching…' via
+      // sendLayout.
+      if (previewShown) {
         setStatus('', false);
-        rejectionShown = false;
+        previewShown = false;
       }
+      lastPreview = null;
       // Apply any state update that arrived during the drag — we deferred
       // it so the dragged DOM node wouldn't get clobbered mid-gesture.
       if (pendingState) {
@@ -201,34 +265,33 @@
       if (!container) continue;
       container.addEventListener('dragover', (e) => {
         if (!dragSrc) return;
-        if (!isDropAllowed(dragSrc.lane, key)) {
-          // Visually flag the rejection but don't preventDefault — the drop
-          // will be ignored by the browser since we never accept it. Covers
-          // the closedVisible → auto no-op case (issue #38). Surface a
-          // plain-language reason in the footer (issue #41).
-          container.classList.add('drag-over', 'drop-rejected');
-          const reason = rejectionReason(dragSrc.lane, key);
-          if (reason) {
-            setStatus(reason, false);
-            rejectionShown = true;
-          }
-          return;
-        }
+        if (!isDropAllowed(dragSrc.lane, key)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         container.classList.add('drag-over');
-        container.classList.remove('drop-rejected');
+        // v0.19 (#49) — announce the action this drop will take. Terse
+        // verb+name format keeps the footer scannable while dragging.
+        // Cache the last computed preview string so the 60fps dragover
+        // doesn't burn a setStatus() DOM write every frame — only update
+        // when the preview text actually changes.
+        const preview = dropPreview(dragSrc.lane, key, dragSrc.isLive, dragSrc.displayName);
+        if (preview && preview !== lastPreview) {
+          setStatus(preview, false);
+          previewShown = true;
+          lastPreview = preview;
+        }
       });
       container.addEventListener('dragleave', (e) => {
         // Only clear when leaving the container (not when crossing into a
         // child card). relatedTarget is the element we're entering.
         if (e.relatedTarget && container.contains(e.relatedTarget)) return;
-        container.classList.remove('drag-over', 'drop-rejected');
-        // Clear the rejection status when the cursor leaves the rejected
-        // lane — keeps the footer accurate as the user keeps dragging.
-        if (rejectionShown && !isDropAllowed(dragSrc?.lane, key)) {
+        container.classList.remove('drag-over');
+        // Clear the preview text when the cursor leaves the lane — the
+        // next lane the user hovers will set its own preview.
+        if (previewShown) {
           setStatus('', false);
-          rejectionShown = false;
+          previewShown = false;
+          lastPreview = null;
         }
       });
       container.addEventListener('drop', (e) => {
@@ -273,6 +336,14 @@
       return;
     }
 
+    // v0.19 (#44) — closed (non-live) tile dropped into Pinned or Auto-sort:
+    // the destination lane requires a live terminal, so the same drop is also
+    // a launch request. Build the launch list before mutating local state.
+    const launchNames = [];
+    if (!sourceCard.isLive && (dstLane === 'pinned' || dstLane === 'auto')) {
+      launchNames.push(sourceCard.name);
+    }
+
     // Remove from source lane.
     const [card] = srcArr.splice(idx, 1);
 
@@ -289,11 +360,20 @@
       dstArr.push(card);
     }
 
+    // Optimistic: flip the card's local isLive so the post-render
+    // matches the user's destination lane. The next state push from the
+    // extension is authoritative — if the launch fails for any reason,
+    // it'll correct us. Better than rendering a "closed" badge on a card
+    // that just initiated a launch.
+    if (launchNames.length > 0) {
+      card.isLive = true;
+    }
+
     render();
-    sendLayout();
+    sendLayout(launchNames);
   }
 
-  function sendLayout() {
+  function sendLayout(launchNames) {
     vscode.postMessage({
       type: 'organizer:applyLayout',
       pinnedOrder: state.pinned.map((c) => c.name),
@@ -301,8 +381,15 @@
       // runtime liveness is the only difference. Send them as one list.
       unpinnedNames: [...state.auto, ...state.closedVisible].map((c) => c.name),
       hiddenNames: state.hidden.map((c) => c.name),
+      // v0.19 (#44) — names to launch as part of this drop. Provider runs
+      // launches AFTER applyLayout so the destination lane's config flags
+      // are set when the terminal opens.
+      launchNames: Array.isArray(launchNames) ? launchNames : [],
     });
-    setStatus('Saved.', true);
+    setStatus(
+      (launchNames && launchNames.length) ? 'Launching…' : 'Saved.',
+      true,
+    );
   }
 
   function setStatus(text, transient) {

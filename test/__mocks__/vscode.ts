@@ -20,6 +20,9 @@ export class EventEmitter {
 class MockUri {
   constructor(public readonly fsPath: string) {}
   static file(p: string) { return new MockUri(p); }
+  static joinPath(base: MockUri, ...segs: string[]) {
+    return new MockUri([base.fsPath, ...segs].join('/'));
+  }
 }
 
 export const Uri = MockUri;
@@ -47,6 +50,46 @@ export const window = {
     _terminals.push(t);
     return t;
   }),
+  // v0.19 — minimal WebviewPanel mock for organizer/panel lifecycle tests.
+  // Records every onDidReceiveMessage/onDidDispose listener so tests can
+  // count subscriptions across show/dispose/reopen cycles.
+  createWebviewPanel: vi.fn(() => {
+    const onDidDisposeListeners: Function[] = [];
+    const onDidReceiveMessageListeners: Function[] = [];
+    const panel = {
+      reveal: vi.fn(),
+      dispose: vi.fn(() => {
+        for (const l of onDidDisposeListeners) l();
+      }),
+      iconPath: undefined as any,
+      webview: {
+        html: '',
+        cspSource: 'vscode-webview://test',
+        asWebviewUri: (uri: any) => uri,
+        postMessage: vi.fn(() => Promise.resolve(true)),
+        onDidReceiveMessage: vi.fn((listener: Function) => {
+          onDidReceiveMessageListeners.push(listener);
+          return { dispose: () => {
+            const i = onDidReceiveMessageListeners.indexOf(listener);
+            if (i >= 0) onDidReceiveMessageListeners.splice(i, 1);
+          }};
+        }),
+      },
+      onDidDispose: vi.fn((listener: Function) => {
+        onDidDisposeListeners.push(listener);
+        return { dispose: () => {
+          const i = onDidDisposeListeners.indexOf(listener);
+          if (i >= 0) onDidDisposeListeners.splice(i, 1);
+        }};
+      }),
+      // Expose internal listener lists for tests to inspect.
+      __testListeners: () => ({
+        onDidDispose: onDidDisposeListeners,
+        onDidReceiveMessage: onDidReceiveMessageListeners,
+      }),
+    };
+    return panel;
+  }),
   showErrorMessage: vi.fn(),
   showInformationMessage: vi.fn(),
   showWarningMessage: vi.fn(),
@@ -55,9 +98,23 @@ export const window = {
   showOpenDialog: vi.fn(),
 };
 
+export enum ViewColumn { Active = -1, Beside = -2, One = 1 }
+
+// v0.19 — registerCommand stores the callback so executeCommand can
+// dispatch through it. The prior pure-spy versions broke tests that
+// exercise the command-dispatch path (e.g. organizer launchByName → launch
+// helper). Tests that don't care about dispatch still see the mocks as
+// vi.fn() with their existing call assertions intact.
+const _commandHandlers = new Map<string, Function>();
 export const commands = {
-  executeCommand: vi.fn(),
-  registerCommand: vi.fn(),
+  registerCommand: vi.fn((cmd: string, cb: Function) => {
+    _commandHandlers.set(cmd, cb);
+    return { dispose: () => _commandHandlers.delete(cmd) };
+  }),
+  executeCommand: vi.fn((cmd: string, ...args: unknown[]) => {
+    const cb = _commandHandlers.get(cmd);
+    return cb ? Promise.resolve(cb(...args)) : Promise.resolve(undefined);
+  }),
 };
 
 export const env = {
@@ -72,5 +129,6 @@ export class RelativePattern {
 export function __resetMock() {
   _terminals.length = 0;
   window.activeTerminal = undefined;
+  _commandHandlers.clear();
   vi.clearAllMocks();
 }

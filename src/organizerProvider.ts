@@ -3,6 +3,8 @@ import { ConfigManager } from './configManager';
 import { TerminalTracker } from './terminalTracker';
 import { getThemeColor } from './types';
 
+type LogFn = (msg: string | (() => string)) => void;
+
 /**
  * v0.19 — tile-organizer panel. Editor-area webview (not sidebar) that
  * renders four lanes of cards for managing tile visibility and pinning:
@@ -38,10 +40,18 @@ export class OrganizerProvider implements vscode.Disposable {
   private suppressOwnEcho = false;
   private suppressOwnEchoTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(extensionUri: vscode.Uri, configManager: ConfigManager, tracker: TerminalTracker) {
+  private log: LogFn;
+
+  constructor(
+    extensionUri: vscode.Uri,
+    configManager: ConfigManager,
+    tracker: TerminalTracker,
+    log?: LogFn,
+  ) {
     this.extensionUri = extensionUri;
     this.configManager = configManager;
     this.tracker = tracker;
+    this.log = log ?? (() => {});
   }
 
   show(): void {
@@ -80,7 +90,13 @@ export class OrganizerProvider implements vscode.Disposable {
     this.postState();
   }
 
-  private handleMessage(msg: unknown): void {
+  /**
+   * Handle a webview message. Public so unit tests can drive the message
+   * flow without standing up the real WebviewPanel — VS Code's panel API
+   * isn't mockable in the test harness. Production code wires this up via
+   * `onDidReceiveMessage` in `show()`.
+   */
+  handleMessage(msg: unknown): void {
     if (!msg || typeof msg !== 'object') return;
     const m = msg as { type?: unknown };
     if (typeof m.type !== 'string') return;
@@ -89,6 +105,7 @@ export class OrganizerProvider implements vscode.Disposable {
         pinnedOrder?: unknown;
         unpinnedNames?: unknown;
         hiddenNames?: unknown;
+        launchNames?: unknown;
       };
       const asNameList = (v: unknown): string[] =>
         Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
@@ -107,6 +124,34 @@ export class OrganizerProvider implements vscode.Disposable {
         unpinnedNames: asNameList(layout.unpinnedNames),
         hiddenNames: asNameList(layout.hiddenNames),
       });
+      // v0.19 (#44) — names that arrived with the drop because the
+      // destination lane (Pinned or Auto-sort) requires a live terminal.
+      // Dispatched via the registered `claudeDashboard.launchByName`
+      // command rather than calling the launch helper directly — keeps
+      // the launch path centralized so future permission checks, telemetry,
+      // or pre-launch hooks added there cover organizer drops too. The
+      // command handler attaches the terminal synchronously via
+      // tracker.attachLaunchedTerminal so the tile renders as idle
+      // (not offline) the instant it resolves — closes the offline-ghost
+      // window the user reported in #45.
+      //
+      // The command handler already filters via configManager.hasTerminal
+      // (defense-in-depth against a compromised webview producing names
+      // not in config), but we filter here too so the log message is
+      // attributable to organizer-side input. Reserved keys
+      // (`__proto__` / `constructor` / `prototype`) are rejected via the
+      // same hasTerminal call.
+      const launchNames = asNameList(layout.launchNames)
+        .filter((name) => {
+          if (!this.configManager.hasTerminal(name)) {
+            this.log(() => `organizer: dropped unknown name "${name}" — skipped`);
+            return false;
+          }
+          return true;
+        });
+      for (const name of launchNames) {
+        void vscode.commands.executeCommand('claudeDashboard.launchByName', name);
+      }
       // Eager echo: webview gets the new state immediately rather than
       // waiting for the debounced save → onChange round-trip.
       this.postState();

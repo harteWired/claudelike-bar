@@ -56,6 +56,33 @@ const path = require('path');
 // for the most recent {role:"assistant"} entry and extracts its first
 // text block. Returns null on any IO/parse failure — the hook must never
 // fail Claude's execution.
+// A user JSONL entry whose content is *only* tool_result blocks is the
+// model's tool-execution feedback — it belongs to the current turn, not
+// the previous one. Used by extractLastAssistantText to walk past
+// tool-result entries without treating them as turn boundaries.
+function isToolResultOnly(content) {
+  if (!Array.isArray(content) || content.length === 0) return false;
+  return content.every((b) => b && typeof b === 'object' && b.type === 'tool_result');
+}
+
+// v0.18.2 (belfry) — turn-boundary-aware reverse scan.
+//
+// Claude Code's JSONL transcript stores each content block on its own line:
+// a single assistant turn produces separate entries for thinking, tool_use,
+// and text blocks rather than bundling them into one message. The original
+// "find the most recent text-bearing assistant line" walk dropped into the
+// previous turn whenever the current turn ended with tool_use/thinking
+// (the common case for tool-heavy turns). That manifested as Telegram
+// pings being one event out of phase — observed and root-caused 2026-05-22.
+//
+// Fix: bound the reverse scan at the next non-tool_result user entry —
+// that user message IS the prompt that started this turn. Tool-result
+// user entries are part of the current turn and we walk past them. If
+// the current turn has no text blocks at all (pure tool-call turn),
+// return null rather than reaching into the previous turn for stale text;
+// the read-merge-write in main() will then leave last_response at its
+// previous value, but the freshness gap is now visible (last_response_at
+// won't advance) rather than silently misleading.
 function extractLastAssistantText(transcriptPath, maxBytes = 65536, charCap = 500) {
   if (!transcriptPath) return null;
   let stat;
@@ -82,12 +109,21 @@ function extractLastAssistantText(transcriptPath, maxBytes = 65536, charCap = 50
     try { entry = JSON.parse(line); }
     catch { continue; } // partial line at the byte boundary, or transcript noise
     const role = entry?.role || entry?.message?.role;
-    if (role !== 'assistant') continue;
     const content = entry?.content ?? entry?.message?.content;
-    const extracted = extractAssistantContent(content);
-    if (extracted) {
-      return extracted.length > charCap ? extracted.slice(0, charCap) + '…' : extracted;
+    if (role === 'assistant') {
+      const extracted = extractAssistantContent(content);
+      if (extracted) {
+        return extracted.length > charCap ? extracted.slice(0, charCap) + '…' : extracted;
+      }
+      // No text in this assistant entry — keep walking back through the
+      // current turn (thinking and tool_use entries land here).
+    } else if (role === 'user') {
+      if (isToolResultOnly(content)) continue;
+      // Real user message — the turn boundary. Stop here; anything before
+      // is the previous turn and must not be surfaced.
+      return null;
     }
+    // Other roles (system / metadata) are skipped.
   }
   return null;
 }

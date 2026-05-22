@@ -271,6 +271,72 @@ describe('dashboard-status.js hook', () => {
     expect(statusFile.last_response).toBeUndefined();
   });
 
+  // v0.18.2 (belfry) — turn-boundary regression suite. Repro of the
+  // 2026-05-22 "one event behind" bug. JSONL stores one content block
+  // per line, so the reverse scan must stop at the user-prompt turn
+  // boundary instead of dropping into the previous turn's text.
+  it('does not leak previous turn response when current turn ends in tool_use', () => {
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      // Previous turn: should never be surfaced as the current response.
+      JSON.stringify({ role: 'user', content: 'older prompt' }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'older response — must not leak' }] }),
+      // Current turn: tool-only ending, no text block.
+      JSON.stringify({ role: 'user', content: 'current prompt' }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'thinking', thinking: 'h' }] }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'tool_use', id: 'a', name: 'Bash', input: {} }] }),
+      JSON.stringify({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: 'r' }] }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toBeUndefined();
+  });
+
+  it('walks past tool_result user entries within current turn', () => {
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: 'user', content: 'do the work' }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'tool_use', id: 'a', name: 'Bash', input: {} }] }),
+      JSON.stringify({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: 'r1' }] }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'done with the work' }] }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toBe('done with the work');
+  });
+
+  it('returns latest text within current turn when multiple text blocks exist', () => {
+    const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
+    fs.writeFileSync(transcriptPath, [
+      JSON.stringify({ role: 'user', content: 'p' }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'first thought' }] }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'tool_use', id: 'a', name: 'X', input: {} }] }),
+      JSON.stringify({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 'a', content: '' }] }),
+      JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'final answer' }] }),
+    ].join('\n') + '\n');
+    const { statusFile } = runHook(
+      JSON.stringify({
+        hook_event_name: 'Stop',
+        cwd: path.join(tmpDir, 'my-project'),
+        transcript_path: transcriptPath,
+      }),
+      { statusDir: tmpDir },
+    );
+    expect(statusFile.last_response).toBe('final answer');
+  });
+
   it('does not write last_response on PreToolUse / UserPromptSubmit', () => {
     const transcriptPath = path.join(tmpDir, 'transcript.jsonl');
     fs.writeFileSync(transcriptPath, [

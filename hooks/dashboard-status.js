@@ -45,6 +45,21 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
+// v0.18.2 (belfry, 2026-05-22) — retry budget for the transcript-flush
+// race. Claude Code can fire the Stop hook before the final assistant
+// text block has been flushed to disk. Empirically the flush lands within
+// ~50–150ms, so one brief retry catches almost all races without
+// meaningfully delaying legitimate pure-tool turns (where no text was
+// emitted at all and the retry will still return null).
+const FLUSH_RETRY_MS = 150;
+
+function syncSleep(ms) {
+  // Block this subprocess for ms. The hook is a one-shot CLI; there's no
+  // event loop to protect. Atomics.wait on an unshared buffer that never
+  // gets notified is the standard Node idiom for "sleep without spinning."
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 // v0.18.1 (belfry) — pull the last assistant text out of a Claude Code
 // JSONL transcript. Used to populate `last_response` on Stop/Notification
 // so consumers (the webview's `Show last prompt`-style modal, belfry's
@@ -65,7 +80,7 @@ function isToolResultOnly(content) {
   return content.every((b) => b && typeof b === 'object' && b.type === 'tool_result');
 }
 
-// v0.18.2 (belfry) — turn-boundary-aware reverse scan.
+// v0.18.2 (belfry) — turn-boundary-aware reverse scan + flush-race retry.
 //
 // Claude Code's JSONL transcript stores each content block on its own line:
 // a single assistant turn produces separate entries for thinking, tool_use,
@@ -75,15 +90,29 @@ function isToolResultOnly(content) {
 // (the common case for tool-heavy turns). That manifested as Telegram
 // pings being one event out of phase — observed and root-caused 2026-05-22.
 //
-// Fix: bound the reverse scan at the next non-tool_result user entry —
-// that user message IS the prompt that started this turn. Tool-result
-// user entries are part of the current turn and we walk past them. If
-// the current turn has no text blocks at all (pure tool-call turn),
-// return null rather than reaching into the previous turn for stale text;
-// the read-merge-write in main() will then leave last_response at its
-// previous value, but the freshness gap is now visible (last_response_at
-// won't advance) rather than silently misleading.
+// Two compounding root causes were addressed:
+//
+//   1. Turn-boundary: bound the reverse scan at the next non-tool_result
+//      user entry — that user message IS the prompt that started this
+//      turn. Tool-result user entries are part of the current turn and
+//      we walk past them. Pure-tool turns return null rather than
+//      reaching into the previous turn for stale text.
+//
+//   2. Flush race: Claude Code can fire the Stop hook before the final
+//      assistant text block has been flushed to disk (observed: a 1.6KB
+//      text block with content-timestamp 100ms before Stop fired was
+//      still not on disk when the hook read it). Defense: if the first
+//      scan returns null, sleep FLUSH_RETRY_MS and retry once. Almost
+//      all flush races land within ~150ms; pure-tool turns pay the same
+//      delay then correctly return null again.
 function extractLastAssistantText(transcriptPath, maxBytes = 65536, charCap = 500) {
+  let result = extractLastAssistantTextOnce(transcriptPath, maxBytes, charCap);
+  if (result) return result;
+  syncSleep(FLUSH_RETRY_MS);
+  return extractLastAssistantTextOnce(transcriptPath, maxBytes, charCap);
+}
+
+function extractLastAssistantTextOnce(transcriptPath, maxBytes = 65536, charCap = 500) {
   if (!transcriptPath) return null;
   let stat;
   try { stat = fs.statSync(transcriptPath); }

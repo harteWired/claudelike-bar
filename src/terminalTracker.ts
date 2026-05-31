@@ -1392,6 +1392,25 @@ export class TerminalTracker implements vscode.Disposable {
     return undefined;
   }
 
+  // v0.20 (#55) — iterate live, user-visible terminals. Skips hidden tiles
+  // (the issue's stated opt-out gesture: "mark it hidden or close it first")
+  // and dead terminals (exitStatus set). Synthesized registered tiles have
+  // no terminalRefs entry so they're skipped automatically. The cb gets the
+  // live vscode.Terminal plus the tile state — callers that want to tally
+  // by status (e.g. broadcast) can branch on tile.status without a second
+  // lookup.
+  forEachTrackedTerminal(
+    cb: (terminal: vscode.Terminal, tile: TileData) => void,
+  ): void {
+    for (const [id, tile] of this.terminals) {
+      if (this.configManager.getTerminal(tile.name)?.hidden === true) continue;
+      const term = this.terminalRefs.get(id);
+      if (!term) continue;
+      if (term.exitStatus !== undefined) continue;
+      cb(term, tile);
+    }
+  }
+
   dispose(): void {
     this.stopNameRefresh();
     for (const timer of this.readyTimers.values()) {

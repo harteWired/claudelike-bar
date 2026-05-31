@@ -149,6 +149,67 @@ export function activate(context: vscode.ExtensionContext) {
     'claudeDashboard.organizeProjects',
     () => organizer.show(),
   );
+  // v0.20 (#55) — fan-out send. InputBox + last-value memory in globalState
+  // (matches CLB's user-global config philosophy). Single-window only in v1:
+  // vscode.window.terminals is window-scoped, and CLB's tracker mirrors it,
+  // so cross-window fan-out would need a file-based broadcast bus (deferred
+  // — issue #55 v1.5). The per-state tally written to the output channel
+  // compensates for v1 having no filter UI: the user sees exactly which
+  // tile states were hit and can re-broadcast if something landed mid-turn.
+  const BROADCAST_LAST_KEY = 'clb.lastBroadcast';
+  const broadcastCmd = vscode.commands.registerCommand(
+    'claudeDashboard.broadcast',
+    async () => {
+      const last = context.globalState.get<string>(BROADCAST_LAST_KEY, '');
+      const text = await vscode.window.showInputBox({
+        prompt: 'Text to broadcast to every tracked terminal (newline appended)',
+        placeHolder: '/compress fast',
+        value: last,
+      });
+      if (text === undefined) return; // user dismissed
+      if (text.length === 0) return; // empty — treat as cancel, don't persist
+      await context.globalState.update(BROADCAST_LAST_KEY, text);
+
+      const tally: Record<string, number> = {};
+      const hitNames: string[] = [];
+      const failures: string[] = [];
+      tracker.forEachTrackedTerminal((term, tile) => {
+        try {
+          term.sendText(text, true);
+          tally[tile.status] = (tally[tile.status] ?? 0) + 1;
+          hitNames.push(tile.name);
+        } catch (err) {
+          failures.push(`${tile.name}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      });
+
+      const total = hitNames.length;
+      if (total === 0) {
+        vscode.window.showInformationMessage(
+          'Claudelike Bar: no tracked terminals to broadcast to.',
+        );
+        return;
+      }
+
+      // Always log — broadcast is a user-explicit action, not background noise,
+      // so the line lands even when debug mode is off. Per-state breakdown
+      // makes it easy to spot when text was queued into a `working` tile.
+      const breakdown = Object.entries(tally)
+        .sort(([, a], [, b]) => b - a)
+        .map(([s, n]) => `${n} ${s}`)
+        .join(', ');
+      output.appendLine(
+        `[${new Date().toISOString().slice(11, 19)}] broadcast ${JSON.stringify(text)} → ${total} terminal${total === 1 ? '' : 's'} (${breakdown}) — [${hitNames.join(', ')}]`,
+      );
+      if (failures.length > 0) {
+        output.appendLine(`  failures: ${failures.join('; ')}`);
+      }
+
+      vscode.window.showInformationMessage(
+        `Broadcast sent to ${total} terminal${total === 1 ? '' : 's'} in this window (${breakdown}).`,
+      );
+    },
+  );
   const showHooksCmd = vscode.commands.registerCommand(
     'claudeDashboard.showHooks',
     () => vscode.env.openExternal(vscode.Uri.parse(HOOKS_DOC_URL)),
@@ -658,6 +719,7 @@ export function activate(context: vscode.ExtensionContext) {
     setupProjectsCmd,
     organizeProjectsCmd,
     organizer,
+    broadcastCmd,
     showHooksCmd,
     removeLegacyHooksCmd,
     diagnoseCmd,

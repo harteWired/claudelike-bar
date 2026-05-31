@@ -2,7 +2,7 @@
   "name": "claudelike-bar",
   "displayName": "Claudelike Bar",
   "description": "Live sidebar for Claude Code terminals — see what every session is doing at a glance without tab-switching.",
-  "version": "0.19.1",
+  "version": "0.20.0",
   "publisher": "harteWired",
   "icon": "media/icon.png",
   "repository": {
@@ -113,6 +113,11 @@
         "command": "claudeDashboard.organizeProjects",
         "title": "Organize Projects",
         "icon": "$(layout)",
+        "category": "Claudelike Bar"
+      },
+      {
+        "command": "claudeDashboard.broadcast",
+        "title": "Broadcast to All Tracked Terminals",
         "category": "Claudelike Bar"
       },
       {

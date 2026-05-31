@@ -952,3 +952,83 @@ describe('TerminalTracker v0.9.1 — session / tool-failure / compaction', () =>
     expect(getTile()?.compacting).toBe(false);
   });
 });
+
+describe('TerminalTracker.forEachTrackedTerminal (#55)', () => {
+  let tracker: TerminalTracker;
+  let config: ConfigManager;
+
+  beforeEach(() => {
+    __resetMock();
+    writeConfig({ terminals: {} });
+  });
+
+  afterEach(() => {
+    tracker.dispose();
+    config.dispose();
+    cleanConfig();
+  });
+
+  it('iterates every live terminal and yields (terminal, tile) pairs', () => {
+    addMockTerminal('alpha');
+    addMockTerminal('beta');
+    addMockTerminal('gamma');
+    config = new ConfigManager(CONFIG_PATH);
+    tracker = new TerminalTracker(config);
+
+    const seen: string[] = [];
+    tracker.forEachTrackedTerminal((term, tile) => {
+      expect(tile.name).toBe(term.name);
+      seen.push(tile.name);
+    });
+    expect(seen.sort()).toEqual(['alpha', 'beta', 'gamma']);
+  });
+
+  it("skips hidden tiles — the issue's opt-out gesture", () => {
+    writeConfig({
+      terminals: {
+        'visible': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+        'hidden':  { color: 'cyan', icon: null, nickname: null, autoStart: false, hidden: true },
+      },
+    });
+    addMockTerminal('visible');
+    addMockTerminal('hidden');
+    config = new ConfigManager(CONFIG_PATH);
+    tracker = new TerminalTracker(config);
+
+    const seen: string[] = [];
+    tracker.forEachTrackedTerminal((_t, tile) => seen.push(tile.name));
+    expect(seen).toEqual(['visible']);
+  });
+
+  it('skips terminals with exitStatus set (process died, tab still open)', () => {
+    addMockTerminal('alive');
+    const dead = addMockTerminal('dead');
+    (dead as any).exitStatus = { code: 0 };
+    config = new ConfigManager(CONFIG_PATH);
+    tracker = new TerminalTracker(config);
+
+    const seen: string[] = [];
+    tracker.forEachTrackedTerminal((_term, tile) => seen.push(tile.name));
+    expect(seen).toEqual(['alive']);
+    // Sanity: the dead terminal is still tracked, just filtered out here.
+    expect(tracker.getTiles().some((t) => t.name === 'dead')).toBe(true);
+  });
+
+  it('includes shell-type tiles by default — user opted in by registering them', () => {
+    writeConfig({
+      terminals: {
+        'claude-tile': { color: 'cyan', icon: null, nickname: null, autoStart: false },
+        'shell-tile':  { color: 'cyan', icon: null, nickname: null, autoStart: false, type: 'shell' },
+      },
+    });
+    addMockTerminal('claude-tile');
+    addMockTerminal('shell-tile');
+    config = new ConfigManager(CONFIG_PATH);
+    tracker = new TerminalTracker(config);
+
+    const seen = new Map<string, string>();
+    tracker.forEachTrackedTerminal((_t, tile) => seen.set(tile.name, tile.status));
+    expect(seen.size).toBe(2);
+    expect(seen.get('shell-tile')).toBe('shell');
+  });
+});

@@ -18,6 +18,26 @@ All settings live in `~/.claude/claudelike-bar.jsonc`. Auto-created when you fir
 | `hidden` | boolean | `false` | Hide this entry from the offline-tiles zone. The terminal still auto-starts if `autoStart: true`. |
 | `type` | `"claude"` \| `"shell"` | `"claude"` | `"shell"` makes this a plain non-Claude tile — gray pill, no animated dot, no state machine, no Claude-specific menu items. Click to focus. Use for ad-hoc shells you want reachable from the bar. Status JSONs that match the slug are ignored (config opt-out is authoritative). |
 
+## Watch / stream terminals (always-on, pinned)
+
+A "watch" terminal is a plain pane that just runs a streaming command (a `tail -f`, an SSH log follower, a `watch` helper) and is pinned to the bottom of the bar so it's always glanceable. It must **not** launch Claude — a bare tail costs zero tokens, whereas `claude` would burn them. The `type: "shell"` + `command` combination does exactly this: the plain tile runs your command verbatim and never falls back to the global `claudeCommand`.
+
+```jsonc
+"erebus-master": {
+  "type": "shell",            // plain gray tile, no Claude state machine
+  "command": "watch erebus-master", // any shell command — runs via sendText, NOT claude
+  "autoStart": true,          // opens on VS Code start
+  "pinned": true,             // sits in the fixed pinned zone at the bottom
+  "nickname": "👁 Erebus",
+  "icon": "eye",
+  "color": "yellow"
+}
+```
+
+- **`pinned: true` + `autoStart: true` = a permanent slot.** Closing the terminal no longer clears its pin (a manual one-off pin still auto-clears on close) — so the pane survives a VS Code restart: auto-start relaunches it and re-pins it from config.
+- The command runs in whatever shell VS Code's integrated terminal opens — i.e. **the machine the VS Code (remote) extension host runs on**. In a devcontainer/SSH-remote setup that's the container/remote box, not the local host. A command that needs to reach another machine (e.g. SSH-tailing a remote log) must be runnable from there.
+- Add as many as you like — each is just another config entry. They all land in the same pinned zone.
+
 ## Sorting tiles
 
 Two modes, set by the top-level `sortMode` key:

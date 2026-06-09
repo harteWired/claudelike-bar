@@ -1265,6 +1265,57 @@ describe('TerminalTracker pinned-closed policy (#48)', () => {
     tracker.dispose();
     cm.dispose();
   });
+
+  // An autoStart entry is a permanent slot (always-on watch terminals). Its
+  // pin must survive a terminal close so the auto-start relaunch re-pins it
+  // from config — honoring the documented "set autoStart: true to keep it
+  // pinned across restarts" contract.
+  it('KEEPS the pin (and skips the unpin toast) when an autoStart pinned terminal closes', () => {
+    writeConfig({
+      terminals: {
+        'watch': { color: 'cyan', icon: null, nickname: 'Watcher', autoStart: true, pinned: true },
+      },
+    });
+    const term = addMockTerminal('watch');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    expect(cm.getTerminal('watch')?.pinned).toBe(true);
+
+    const events: Array<{ name: string; displayName: string }> = [];
+    tracker.onPinCleared((evt) => events.push(evt));
+
+    tracker.handleTerminalClosed(term as unknown as any);
+
+    // Pin preserved, no toast fired.
+    expect(cm.getTerminal('watch')?.pinned).toBe(true);
+    expect(events).toHaveLength(0);
+
+    tracker.dispose();
+    cm.dispose();
+  });
+
+  it('still auto-clears the pin for a manual (autoStart: false) pinned terminal', () => {
+    writeConfig({
+      terminals: {
+        'adhoc': { color: 'cyan', icon: null, nickname: null, autoStart: false, pinned: true },
+      },
+    });
+    const term = addMockTerminal('adhoc');
+    const cm = new ConfigManager(CONFIG_PATH);
+    const tracker = new TerminalTracker(cm);
+
+    const events: Array<{ name: string; displayName: string }> = [];
+    tracker.onPinCleared((evt) => events.push(evt));
+
+    tracker.handleTerminalClosed(term as unknown as any);
+
+    expect(cm.getTerminal('adhoc')?.pinned).toBeUndefined();
+    expect(events).toHaveLength(1);
+
+    tracker.dispose();
+    cm.dispose();
+  });
 });
 
 // v0.19 (#48) — round-trip persistence for the dismissal flag.

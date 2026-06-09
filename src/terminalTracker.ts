@@ -1112,13 +1112,31 @@ export class TerminalTracker implements vscode.Disposable {
    * tile was pinned, auto-clear the pin in config and fire the one-time
    * notice. Pinning is a statement about an active terminal slot — a
    * terminal exit therefore clears the pin so the tile lands cleanly in
-   * Closed-but-visible. For pin-across-restart, users set `autoStart: true`.
+   * Closed-but-visible.
+   *
+   * Exception: an `autoStart: true` entry is an explicitly permanent slot
+   * (always-on "watch"/stream terminals, pinned dashboards). The class
+   * docstring's "for pin-across-restart, users set autoStart: true" contract
+   * only holds if we DON'T clear its pin on close — otherwise the next
+   * auto-start relaunch reads `pinned: false` and the tile drops out of the
+   * pinned zone. So autoStart entries keep their pin (and skip the unpin
+   * toast). Manual (ad-hoc) pins still auto-clear so a closed one-off terminal
+   * lands cleanly in Closed-but-visible.
+   *
+   * Note on timing: keeping `pinned: true` in config does NOT re-pin the tile
+   * the instant it closes — nothing relaunches on `onDidCloseTerminal`. The
+   * re-pin takes effect at the *next activation-time auto-start* (VS Code
+   * restart / reload), when `addTerminal` reads `pinned: cfg?.pinned === true`
+   * for the freshly-launched terminal. While the terminal stays closed within
+   * a session it renders as an offline/registered tile (unchanged behavior) —
+   * the point of preserving the config pin is purely cross-restart survival.
    */
   handleTerminalClosed(t: vscode.Terminal): void {
     const id = this.terminalIdMap.get(t);
     const tile = id !== undefined ? this.terminals.get(id) : undefined;
     const cfg = tile ? this.configManager.getTerminal(tile.name) : undefined;
-    const wasPinned = cfg?.pinned === true;
+    const isPermanent = cfg?.autoStart === true;
+    const wasPinned = cfg?.pinned === true && !isPermanent;
     const closedName = tile?.name;
     const closedDisplay = tile?.displayName ?? closedName;
     this.removeTerminal(t);

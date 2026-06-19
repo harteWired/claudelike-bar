@@ -222,7 +222,11 @@ function patchTile(el, tile) {
       : (tile.status === 'registered' && tile.type === 'shell')
         ? 'shell'
         : tile.status;
-    dot.className = `dot ${dotClass}`;
+    // v0.19 (#36) — `fresh` decorates the cyan ready pulse for ~3s after
+    // a transition into ready so the just-finished tile is visually
+    // unmissable. Tracker clears the flag via a per-tile timer.
+    const fresh = tile.status === 'ready' && tile.freshlyReady ? ' fresh' : '';
+    dot.className = `dot ${dotClass}${fresh}`;
   }
 
   // Time
@@ -313,6 +317,8 @@ function createTileEl(tile, index) {
     : (tile.status === 'registered' && tile.type === 'shell')
       ? 'shell'
       : tile.status;
+  // v0.19 (#36) — fresh-ready burst class on initial render too.
+  const fresh = tile.status === 'ready' && tile.freshlyReady ? ' fresh' : '';
 
   const iconHtml = tile.icon
     ? `<span class="tile-icon codicon codicon-${escapeHtml(tile.icon)}"></span>`
@@ -326,7 +332,7 @@ function createTileEl(tile, index) {
 
   el.innerHTML = `
     <div class="tile-header">
-      <span class="dot ${dotClass}"></span>
+      <span class="dot ${dotClass}${fresh}"></span>
       ${iconHtml}
       <span class="tile-name">${escapeHtml(displayName)}</span>
       ${tile.status !== 'idle' ? `<span class="tile-time">${timeStr}</span>` : '<span class="tile-time"></span>'}
@@ -548,6 +554,20 @@ function showContextMenu(e, tileId) {
     vscode.postMessage({ type: 'setPinned', id: tileId, pinned: !isPinned });
   });
   menu.appendChild(pinItem);
+
+  // v0.19 (#34) — Copy a keybindings.json snippet for this tile so users
+  // can wire a focus hotkey without remembering the focusByName syntax.
+  // VS Code has no first-class API for dynamically registering keybindings
+  // from an extension, so the snippet-to-clipboard route is the path that
+  // works today. Skip on registered/synthetic tiles — they don't have a
+  // live VS Code terminal to focus, and their slug is the only reachable
+  // identity (no nickname-as-projectName until launched).
+  if (!isRegistered) {
+    const hotkeyItem = menuItem('⌨', 'Copy hotkey JSON…', () => {
+      vscode.postMessage({ type: 'copyHotkeyJson', id: tileId });
+    });
+    menu.appendChild(hotkeyItem);
+  }
 
   // v0.12 — Mute / Unmute audio + Launch another project. Both are
   // Claude-workflow items — skip them on shell tiles.

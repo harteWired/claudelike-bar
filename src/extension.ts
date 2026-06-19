@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { DashboardProvider } from './dashboardProvider';
+import { OrganizerProvider } from './organizerProvider';
 import { TerminalTracker } from './terminalTracker';
 import { StatusWatcher } from './statusWatcher';
 import { ConfigManager } from './configManager';
@@ -89,6 +90,7 @@ export function activate(context: vscode.ExtensionContext) {
   const tracker = new TerminalTracker(configManager, log);
   const watcher = new StatusWatcher();
   const provider = new DashboardProvider(context.extensionUri);
+  const organizer = new OrganizerProvider(context.extensionUri, configManager, tracker, log);
 
   // Register the webview provider
   const registration = vscode.window.registerWebviewViewProvider(
@@ -127,9 +129,25 @@ export function activate(context: vscode.ExtensionContext) {
     'claudeDashboard.launchProject',
     () => executeLaunchProjectCommand(configManager, tracker, (m) => log(m)),
   );
+  // v0.19 (#44) — name-targeted launch. The organizer panel dispatches
+  // this for each tile its drop pulled from the closed lane into an
+  // active lane; the bar's existing `launchByName` webview message also
+  // routes through this command path.
+  const launchByNameCmd = vscode.commands.registerCommand(
+    'claudeDashboard.launchByName',
+    (name: unknown) => {
+      if (typeof name !== 'string') return;
+      if (!configManager.hasTerminal(name)) return;
+      launchRegisteredProject(configManager, tracker, name, (m) => log(m));
+    },
+  );
   const setupProjectsCmd = vscode.commands.registerCommand(
     'claudeDashboard.setupProjects',
     () => runSetupWizard(configManager, context.extensionPath, (m) => log(m)),
+  );
+  const organizeProjectsCmd = vscode.commands.registerCommand(
+    'claudeDashboard.organizeProjects',
+    () => organizer.show(),
   );
   const showHooksCmd = vscode.commands.registerCommand(
     'claudeDashboard.showHooks',
@@ -472,6 +490,60 @@ export function activate(context: vscode.ExtensionContext) {
           refreshTiles();
         }
         break;
+
+      case 'copyHotkeyJson': {
+        // v0.19 (#34) — generate a keybindings.json snippet for this tile
+        // and put it on the clipboard. VS Code has no first-class dynamic
+        // keybinding API, so paste-into-keybindings.json is the path that
+        // works today. Pre-fills the InputBox with any prior `hotkey` from
+        // config so the user's choice persists across reopens.
+        const tile = tracker.getTiles().find((t) => t.id === message.id);
+        if (!tile) break;
+        const cfg = configManager.getTerminal(tile.name);
+        const focusName = cfg?.projectName ?? tile.displayName ?? tile.name;
+        const previous = (cfg?.hotkey && typeof cfg.hotkey === 'string') ? cfg.hotkey : '';
+        vscode.window.showInputBox({
+          prompt: `Hotkey for "${tile.displayName}" (e.g. ctrl+alt+a, shift+f7)`,
+          value: previous,
+          placeHolder: 'ctrl+alt+a',
+          validateInput: (raw) => {
+            const v = raw.trim();
+            if (v.length === 0) return null;
+            // Loose check — VS Code accepts pretty-much any string and
+            // surfaces its own parse errors at registration time. We only
+            // catch obvious nonsense (bare modifiers, spaces inside keys).
+            if (!/^[a-zA-Z0-9+\- ]+$/.test(v)) {
+              return 'Use VS Code accelerator syntax — modifiers + key separated by "+" (e.g. ctrl+alt+a).';
+            }
+            return null;
+          },
+        }).then((result) => {
+          if (result === undefined) return;          // user cancelled
+          const key = result.trim();
+          if (key.length === 0) {
+            configManager.setHotkey(tile.name, null);
+            vscode.window.showInformationMessage(`Cleared hotkey for "${tile.displayName}".`);
+            return;
+          }
+          configManager.setHotkey(tile.name, key);
+          const snippet = JSON.stringify({
+            command: 'claudeDashboard.focusByName',
+            args: focusName,
+            key,
+          }, null, 2);
+          void vscode.env.clipboard.writeText(snippet + ',');
+          vscode.window.showInformationMessage(
+            `Hotkey snippet copied. Open keybindings.json (Ctrl+Shift+P → "Open Keyboard Shortcuts (JSON)") and paste inside the array.`,
+            'Open keybindings.json',
+          ).then((choice) => {
+            if (choice === 'Open keybindings.json') {
+              void vscode.commands.executeCommand('workbench.action.openGlobalKeybindingsFile');
+            }
+          });
+          log(`copyHotkeyJson ${tile.name}: → "${key}"`);
+        });
+        break;
+      }
     }
   };
 
@@ -523,6 +595,32 @@ export function activate(context: vscode.ExtensionContext) {
     });
   });
 
+  // v0.19 (#48) — first-auto-unpin toast. Fires at most once per workspace:
+  // after the user clicks "Don't show again", `seenPinClearedNotice` flips
+  // to true in config and this listener short-circuits forever after. The
+  // toast is non-modal — VS Code parks it in the bottom-right; users who
+  // never interact still get the auto-unpin behavior without UI blocking.
+  // Lives here (not in TerminalTracker) so the state machine stays free of
+  // user-facing notification concerns — tracker just fires the event.
+  const pinClearedSub = tracker.onPinCleared(({ displayName }) => {
+    if (configManager.getSeenPinClearedNotice()) return;
+    const DONT_SHOW = "Don't show again";
+    const OPEN_CONFIG = 'Open config';
+    void Promise.resolve(
+      vscode.window.showInformationMessage(
+        `Pin removed for "${displayName}" because its terminal closed. Use autoStart to keep it pinned across restarts.`,
+        DONT_SHOW,
+        OPEN_CONFIG,
+      ),
+    ).then((choice) => {
+      if (choice === DONT_SHOW) {
+        configManager.setSeenPinClearedNotice(true);
+      } else if (choice === OPEN_CONFIG) {
+        void vscode.commands.executeCommand('claudeDashboard.openConfig');
+      }
+    });
+  });
+
   // Refresh tiles when config file changes (color/nickname/mode edits).
   // The AudioPlayer's warn-once memory is also cleared so a file the user
   // just dropped in gets a fresh chance to be picked up.
@@ -556,7 +654,10 @@ export function activate(context: vscode.ExtensionContext) {
     restoreStatuslineCmd,
     registerProjectCmd,
     launchProjectCmd,
+    launchByNameCmd,
     setupProjectsCmd,
+    organizeProjectsCmd,
+    organizer,
     showHooksCmd,
     removeLegacyHooksCmd,
     diagnoseCmd,
@@ -571,6 +672,7 @@ export function activate(context: vscode.ExtensionContext) {
     configSub,
     audioPlayer,
     pushSub,
+    pinClearedSub,
     output,
     timerDisposable,
   );

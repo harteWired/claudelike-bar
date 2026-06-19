@@ -75,6 +75,16 @@ export interface TerminalConfig {
    * the bar alongside Claude tiles.
    */
   type?: 'claude' | 'shell';
+  /**
+   * v0.19 (#34) — preferred focus hotkey, in VS Code accelerator syntax
+   * (e.g. "ctrl+alt+a", "shift+f7"). Memo only — the extension does NOT
+   * register this binding directly because VS Code has no first-class API
+   * for dynamic keybinding registration. The "Copy hotkey JSON…" right-
+   * click action uses this value as the suggested key when generating a
+   * keybindings.json snippet for the user to paste. Set via that action
+   * or by hand-editing the config.
+   */
+  hotkey?: string | null;
 }
 
 /**
@@ -167,6 +177,22 @@ export interface ConfigFile {
    * by side if both are enabled.
    */
   pushNotifications?: boolean;
+  /**
+   * v0.19 (#41) — when false, the "Close terminal?" confirmation modal
+   * shown after dragging a live tile into the "Closed but visible" lane
+   * is skipped (the terminal is closed immediately). Set by the modal's
+   * "Don't ask again" button. Defaults to true (show modal) — destructive
+   * runtime action shouldn't be silently armed on first install.
+   */
+  confirmCloseOnDrop?: boolean;
+  /**
+   * v0.19 (#48) — set true after the user has seen and dismissed the
+   * one-time toast that fires the first time a pinned tile's terminal
+   * exits and the pin is auto-cleared. Capped at one notification per
+   * workspace, ever — once flipped to true, the toast never fires again.
+   * Default false (toast still pending).
+   */
+  seenPinClearedNotice?: boolean;
   terminals: Record<string, TerminalConfig>;
 }
 
@@ -176,6 +202,11 @@ const DEFAULT_AUDIO_DEBOUNCE_MS = 150;
 
 const CONFIG_FILENAME = '.claudelike-bar.jsonc';
 const LEGACY_CONFIG_FILENAME = '.claudelike-bar.json';
+
+// Names that resolve to live prototype objects under bracket-notation
+// lookup. Filtered at any boundary that takes terminal names from a
+// webview/IPC source so writes can't pollute Object.prototype.
+const RESERVED_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 const DEFAULT_LABELS: Record<string, string> = {
   idle: 'Idle',
@@ -668,6 +699,22 @@ export class ConfigManager implements vscode.Disposable {
   }
 
   /**
+   * v0.19 (#34) — record the user's preferred focus hotkey on a tile.
+   * Memo only; VS Code can't dynamically register this. The webview's
+   * "Copy hotkey JSON…" action calls this so the chosen key persists
+   * across sessions for any future copy/paste/audit. Empty / null
+   * clears the field.
+   */
+  setHotkey(name: string, key: string | null): boolean {
+    const entry = this.config.terminals[name];
+    if (!entry) return false;
+    if (key && key.length > 0) entry.hotkey = key;
+    else delete entry.hotkey;
+    this.scheduleSave();
+    return true;
+  }
+
+  /**
    * v0.18.0 (#27) — set the `hidden` flag for a config entry. Returns true
    * when the entry exists (and the flag was applied), false when no such
    * slug is registered. The synth filter in TerminalTracker drops hidden
@@ -716,6 +763,80 @@ export class ConfigManager implements vscode.Disposable {
     this.scheduleSave();
   }
 
+  /**
+   * v0.19 — atomic layout write from the tile-organizer panel. The webview
+   * owns the full lane-membership picture; this method just applies it in a
+   * single config write.
+   *
+   *   pinnedOrder    — names with `pinned: true`, in the panel's display order
+   *                    (translates to `order: 0..N-1` within the pinned zone)
+   *   unpinnedNames  — names with `pinned: false, hidden: false`. Covers both
+   *                    "Auto-sort" (running) and "Closed but visible" lanes,
+   *                    which share config state and only differ at runtime.
+   *                    Order isn't persisted — auto-sort is status-driven.
+   *   hiddenNames    — names with `hidden: true`. Order doesn't matter;
+   *                    these tiles don't appear in the bar at all.
+   *
+   * Names not present in any list keep their existing flags (defensive — the
+   * panel is supposed to enumerate everything, but a stale message from a
+   * cached webview shouldn't silently archive tiles).
+   */
+  applyOrganizerLayout(layout: {
+    pinnedOrder: string[];
+    unpinnedNames: string[];
+    hiddenNames: string[];
+  }): void {
+    // Reject reserved property names — the webview is shipped by the
+    // extension today, but bracket-notation lookups on `__proto__` /
+    // `constructor` / `prototype` would return live prototype objects and
+    // turn any future webview message-channel slip into a host-wide
+    // prototype-pollution gadget. Belt-and-braces with hasOwnProperty.call.
+    const lookup = (name: string): TerminalConfig | undefined => {
+      if (RESERVED_KEYS.has(name)) return undefined;
+      if (!Object.prototype.hasOwnProperty.call(this.config.terminals, name)) {
+        return undefined;
+      }
+      return this.config.terminals[name];
+    };
+    // Wipe stale `order` values — pinnedOrder reassigns the only ones we
+    // care about, and unpinned/hidden tiles must not carry orders that the
+    // pinned-zone sort would treat as authoritative.
+    for (const cfg of Object.values(this.config.terminals)) {
+      delete cfg.order;
+    }
+    layout.pinnedOrder.forEach((name, i) => {
+      const e = lookup(name);
+      if (!e) return;
+      e.pinned = true;
+      delete e.hidden;
+      e.order = i;
+    });
+    for (const name of layout.unpinnedNames) {
+      const e = lookup(name);
+      if (!e) continue;
+      delete e.pinned;
+      delete e.hidden;
+    }
+    for (const name of layout.hiddenNames) {
+      const e = lookup(name);
+      if (!e) continue;
+      delete e.pinned;
+      e.hidden = true;
+    }
+    // Flip sortMode to 'auto' so the bar's unpinned-tile order matches what
+    // the panel just showed — wiping `order` on unpinned tiles while
+    // sortMode='manual' would otherwise fall back to lastActivity sort and
+    // silently undo any prior in-bar drag-reorder.
+    this.config.sortMode = 'auto';
+    // Fire onChange synchronously so listeners (bar, organizer) re-render
+    // immediately. The FS-watcher-triggered reload that normally fires
+    // onChange after a save round-trip is suppressed by the isSaving flag
+    // (configManager.ts:378), so without this synchronous fire the bar
+    // never observes pinned/hidden flag flips from drag operations.
+    this.onChangeEmitter.fire();
+    this.scheduleSave();
+  }
+
   /** True if any terminal has an explicit `order` set. */
   hasExplicitOrder(): boolean {
     for (const cfg of Object.values(this.config.terminals)) {
@@ -752,6 +873,41 @@ export class ConfigManager implements vscode.Disposable {
 
   getShowRegisteredProjects(): boolean {
     return this.config.showRegisteredProjects !== false;
+  }
+
+  /**
+   * v0.19 — prototype-pollution-safe membership check. Plain
+   * `getTerminal('__proto__')` would return `Object.prototype`, so a
+   * webview message containing reserved keys could appear to refer to a
+   * valid entry. Use this anywhere an IPC-boundary name needs to be
+   * vetted before downstream operations (e.g. `launchRegisteredProject`).
+   */
+  hasTerminal(name: string): boolean {
+    if (RESERVED_KEYS.has(name)) return false;
+    return Object.prototype.hasOwnProperty.call(this.config.terminals, name);
+  }
+
+  /** v0.19 (#41) — confirmation modal preference for drop-to-close. */
+  getConfirmCloseOnDrop(): boolean {
+    return this.config.confirmCloseOnDrop !== false;
+  }
+
+  setConfirmCloseOnDrop(value: boolean): void {
+    if (this.config.confirmCloseOnDrop === value) return;
+    this.config.confirmCloseOnDrop = value;
+    this.scheduleSave();
+  }
+
+  /** v0.19 (#48) — true once the first-auto-unpin toast has been dismissed. */
+  getSeenPinClearedNotice(): boolean {
+    return this.config.seenPinClearedNotice === true;
+  }
+
+  setSeenPinClearedNotice(value: boolean): void {
+    if (this.config.seenPinClearedNotice === value) return;
+    if (value) this.config.seenPinClearedNotice = true;
+    else delete this.config.seenPinClearedNotice;
+    this.scheduleSave();
   }
 
   private scheduleSave(): void {
@@ -823,6 +979,12 @@ export class ConfigManager implements vscode.Disposable {
     const sortMode = this.getSortMode();
     const claudeCommand = this.config.claudeCommand ?? null;
     const debug = this.config.debug === true;
+    // Emit confirmCloseOnDrop only when the user has explicitly opted out
+    // of the modal (clicked "Don't ask again"). Default true → absent.
+    const confirmCloseOnDropOverride = this.config.confirmCloseOnDrop === false;
+    // Emit seenPinClearedNotice only when the user has dismissed the toast
+    // (clicked "Don't show again"). Default false → absent.
+    const seenPinClearedNoticeOverride = this.config.seenPinClearedNotice === true;
     const labels = { ...DEFAULT_LABELS, ...this.config.labels };
     const thresholds = this.getContextThresholds();
     const ignoredTexts = this.getIgnoredTexts();
@@ -908,6 +1070,19 @@ export class ConfigManager implements vscode.Disposable {
       '  // Use this to diagnose stuck tiles or missing status events.',
       `  "debug": ${JSON.stringify(debug)},`,
       '',
+      ...(confirmCloseOnDropOverride ? [
+        '  // Dragging a live tile into the "Closed but visible" lane closes',
+        '  // its terminal. You opted out of the confirmation modal — set this',
+        '  // back to true (or delete the line) to re-enable the prompt.',
+        '  "confirmCloseOnDrop": false,',
+        '',
+      ] : []),
+      ...(seenPinClearedNoticeOverride ? [
+        '  // The one-time toast about pin-clearing-on-terminal-exit was',
+        '  // dismissed. Delete this line (or set to false) to see it again.',
+        '  "seenPinClearedNotice": true,',
+        '',
+      ] : []),
       '  // \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510',
       '  // \u2502  FINE TUNING                                    \u2502',
       '  // \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518',

@@ -72,6 +72,18 @@ export interface TileData {
   // has been submitted yet for this tile.
   lastPrompt?: string;
   lastPromptAt?: number;
+  // v0.19 (#36) — millisecond timestamp of the most recent transition
+  // *into* `ready`. Used by the auto-mode comparator to keep newly-ready
+  // tiles at the top of the ready band (vs. ageing-by-other-events drift
+  // when the band falls back to lastActivity). Cleared on transitions
+  // out of ready (working/done/error/offline). Undefined for tiles that
+  // were never ready or have moved on.
+  readyAt?: number;
+  // v0.19 (#36) — true for ~3s after a ready transition. Webview adds a
+  // .fresh class for a brighter / faster pulse so the user can see at a
+  // glance which tile just transitioned. Decays via a tracker timer that
+  // fires onChange when it clears.
+  freshlyReady?: boolean;
 }
 
 /**
@@ -107,6 +119,7 @@ export type WebviewMessage =
   | { type: 'showLastPrompt'; id: number }
   | { type: 'launchByName'; name: string }
   | { type: 'hideRegisteredTile'; name: string }
+  | { type: 'copyHotkeyJson'; id: number }
   // v0.12 — webview → extension acks after an audio play attempt. Only the
   // internal __firePlayForTest command consumes these; production code
   // ignores them. Kept always-on so the CI smoke test doesn't need a

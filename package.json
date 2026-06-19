@@ -2,7 +2,7 @@
   "name": "claudelike-bar",
   "displayName": "Claudelike Bar",
   "description": "Live sidebar for Claude Code terminals — see what every session is doing at a glance without tab-switching.",
-  "version": "0.18.2",
+  "version": "0.19.1",
   "publisher": "harteWired",
   "icon": "media/icon.png",
   "repository": {
@@ -110,6 +110,12 @@
         "category": "Claudelike Bar"
       },
       {
+        "command": "claudeDashboard.organizeProjects",
+        "title": "Organize Projects",
+        "icon": "$(layout)",
+        "category": "Claudelike Bar"
+      },
+      {
         "command": "claudeDashboard.showHooks",
         "title": "Show Me the Hooks (open docs)",
         "category": "Claudelike Bar"
@@ -185,6 +191,53 @@
         "category": "Claudelike Bar"
       }
     ],
+    "keybindings": [
+      {
+        "command": "claudeDashboard.focusSlot1",
+        "key": "ctrl+alt+1",
+        "mac": "cmd+alt+1"
+      },
+      {
+        "command": "claudeDashboard.focusSlot2",
+        "key": "ctrl+alt+2",
+        "mac": "cmd+alt+2"
+      },
+      {
+        "command": "claudeDashboard.focusSlot3",
+        "key": "ctrl+alt+3",
+        "mac": "cmd+alt+3"
+      },
+      {
+        "command": "claudeDashboard.focusSlot4",
+        "key": "ctrl+alt+4",
+        "mac": "cmd+alt+4"
+      },
+      {
+        "command": "claudeDashboard.focusSlot5",
+        "key": "ctrl+alt+5",
+        "mac": "cmd+alt+5"
+      },
+      {
+        "command": "claudeDashboard.focusSlot6",
+        "key": "ctrl+alt+6",
+        "mac": "cmd+alt+6"
+      },
+      {
+        "command": "claudeDashboard.focusSlot7",
+        "key": "ctrl+alt+7",
+        "mac": "cmd+alt+7"
+      },
+      {
+        "command": "claudeDashboard.focusSlot8",
+        "key": "ctrl+alt+8",
+        "mac": "cmd+alt+8"
+      },
+      {
+        "command": "claudeDashboard.focusSlot9",
+        "key": "ctrl+alt+9",
+        "mac": "cmd+alt+9"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -194,6 +247,11 @@
         },
         {
           "command": "claudeDashboard.registerProject",
+          "when": "view == claudeDashboard.mainView",
+          "group": "navigation"
+        },
+        {
+          "command": "claudeDashboard.organizeProjects",
           "when": "view == claudeDashboard.mainView",
           "group": "navigation"
         },

@@ -84,6 +84,16 @@ The split is deliberate: `command`/`cwd` keep a no-registry launcher whole, whil
 launcher that has its own trusted source of truth never executes requester-supplied
 strings.
 
+### Writer obligations
+
+Request files **MUST be written atomically**: serialize to `<dir>/<slug>.json.tmp.<pid>`,
+then `rename()` over `<slug>.json`. Identical to the Status-File Contract's write
+semantics, and for the same reason — a launcher's watcher fires on file *create*, and a
+plain `writeFileSync` creates an empty file then fills it, so the watcher can wake on a
+zero-byte or half-written request and fail to parse it. `rename()` is atomic on POSIX
+(and ReplaceFile/MoveFileEx on win32), so the watcher only ever observes a complete file.
+The `.tmp.<pid>` suffix keeps it out of the launcher's `<slug>.json` match.
+
 ---
 
 ## §C — Launcher consume semantics
@@ -92,11 +102,20 @@ A launcher that opts in (see §D) watches the request dir and, for each `<slug>.
 
 1. **Freshness gate.** If `now - ts > FRESHNESS_WINDOW` (recommended **60s**), delete the
    file and ignore it. Guards against stale/replayed requests firing on activation.
+   *v1 assumes writer and launcher share a clock (same host — true for #31). When #29
+   federation extends this to spawn-on-machine-X, cross-host clock skew makes an mtime/`ts`
+   gate fragile; cross-host freshness is a #29 concern, out of scope here.*
 2. **Atomic consume.** Read → act → `unlink()` the request file, exactly once. The unlink
    happens regardless of launch success, so a config reload or dir re-scan can never
-   double-launch from the same request.
+   double-launch from the same request. As belt-and-suspenders to the writer's atomic
+   write (§B), a launcher SHOULD also defensively skip (not crash on) a malformed/partial
+   JSON parse and leave the file for the next event.
 3. **Idempotent launch.** If a session for `slug` is already live, focus it rather than
    spawning a duplicate. (CLB's `launchRegisteredProject` already focuses-not-duplicates.)
+   *Interaction with `resume`: if a request carries `resume:<uuid>` but a terminal for
+   `slug` is already live, the idempotent rule wins — the launcher focuses the existing
+   session and does NOT start the requested uuid. Intentional for v1 (focus over duplicate);
+   the requester shouldn't assume `resume` overrides a live session.*
 
 A launcher SHOULD also sweep stale request files on startup (same freshness gate) so a
 request written while the launcher was down doesn't fire late.
@@ -170,7 +189,8 @@ v1 is **spawn-only**. Killing is intentionally out of scope on the launcher side
   `CLAUDE_LAUNCH_REQUESTS_DIR`. Separate from the status dir.
 - Payload key is **`slug`**; `command`/`cwd` are optional hints, not directives.
 - Launcher behavior is **opt-in, default off**, trust-gated, slug-not-command, registered-only.
-- Consume is **atomic** (read→act→unlink) with a **60s freshness gate**.
+- Requests are **written atomically** (tmp+rename, like status files); consume is **atomic**
+  (read→act→unlink) with a **60s freshness gate** (same-host clock; cross-host is #29).
 - **Spawn-only.** /kill stays the requester's channel-kill; launcher-side close is v2.
 
 ---
@@ -180,7 +200,7 @@ v1 is **spawn-only**. Killing is intentionally out of scope on the launcher side
 | Concern | claudelike-bar (launcher) | belfry (requester) |
 |---------|---------------------------|--------------------|
 | §A dir resolution | `resolveLaunchRequestsDir` (TBD, mirrors `getStatusDir`) | mirror in belfry writer |
-| §B payload | reads `slug` (+ validated `resume`); ignores `command`/`cwd` | writes `slug`, `ts`, optional `command`/`cwd` hints |
+| §B payload | reads `slug` (+ validated `resume`); ignores `command`/`cwd` | writes `slug`, `ts`, optional `command`/`cwd` hints, **atomically (tmp+rename)** |
 | §C consume | watcher: freshness → atomic unlink → idempotent launch (TBD) | — (write-only) |
 | §D security | opt-in flag + trust gate + slug→config command + registered gate (TBD) | constrains the hint to `claude --channels server:<slug>` |
 | /kill | — (v1 none) | channel-kill via registry PID (unchanged) |

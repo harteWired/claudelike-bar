@@ -673,3 +673,39 @@ describe('ConfigManager.getAutoStartTerminalOptions', () => {
     expect(opts.shellArgs).toBeUndefined();
   });
 });
+
+describe('ConfigManager.getBroadcastStaggerMs (#68)', () => {
+  let tmpWorkspace: string;
+  let cm: ConfigManager;
+
+  beforeEach(() => {
+    tmpWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), 'cm-stagger-test-'));
+  });
+  afterEach(() => {
+    if (cm) cm.dispose();
+    fs.rmSync(tmpWorkspace, { recursive: true, force: true });
+  });
+
+  function makeCm(config: object): ConfigManager {
+    (vscode.workspace as any).workspaceFolders = [
+      { uri: (vscode.Uri as any).file(tmpWorkspace), name: 'test', index: 0 },
+    ];
+    fs.writeFileSync(path.join(tmpWorkspace, '.claudelike-bar.jsonc'), JSON.stringify(config));
+    cm = new ConfigManager(path.join(tmpWorkspace, '.claudelike-bar.jsonc'));
+    return cm;
+  }
+
+  it('defaults to 1000ms when unset', () => {
+    expect(makeCm({ terminals: {} }).getBroadcastStaggerMs()).toBe(1000);
+  });
+
+  it('honors an explicit value, including 0 (instant fan-out)', () => {
+    expect(makeCm({ broadcastStaggerMs: 2500, terminals: {} }).getBroadcastStaggerMs()).toBe(2500);
+    expect(makeCm({ broadcastStaggerMs: 0, terminals: {} }).getBroadcastStaggerMs()).toBe(0);
+  });
+
+  it('falls back to the default for invalid (negative / non-finite / non-number) values', () => {
+    expect(makeCm({ broadcastStaggerMs: -500, terminals: {} }).getBroadcastStaggerMs()).toBe(1000);
+    expect(makeCm({ broadcastStaggerMs: 'fast' as any, terminals: {} }).getBroadcastStaggerMs()).toBe(1000);
+  });
+});

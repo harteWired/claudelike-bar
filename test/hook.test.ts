@@ -15,6 +15,10 @@ function runHook(
   const env = {
     ...process.env,
     CLAUDELIKE_STATUS_DIR: statusDir,
+    // The behavioral suite below predates STRICT and asserts basename-derived
+    // slugs (event/status/last_response logic, mode-independent). Run it in
+    // legacy mode; STRICT default-on behavior has its own describe block.
+    CLAUDELIKE_BAR_STRICT: '0',
     ...opts.env,
   };
   // Remove PATH-inherited CLAUDELIKE_BAR_NAME unless the caller set it
@@ -373,5 +377,67 @@ describe('dashboard-status.js hook', () => {
     );
     expect(exitCode).toBe(0);
     expect(statusFile.last_response).toBeUndefined();
+  });
+});
+
+// Status-File Contract v1 §B — STRICT slug resolution (default-on). Unlike the
+// legacy suite above, these run the hook WITHOUT CLAUDELIKE_BAR_STRICT=0.
+describe('dashboard-status.js hook — STRICT slug resolution (Contract §B)', () => {
+  let statusDir: string;
+  let fakeHome: string;
+
+  beforeEach(() => {
+    statusDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-strict-dir-'));
+    fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-strict-home-'));
+  });
+  afterEach(() => {
+    fs.rmSync(statusDir, { recursive: true, force: true });
+    fs.rmSync(fakeHome, { recursive: true, force: true });
+  });
+
+  function runStrict(stdin: string, extraEnv: Record<string, string> = {}): string[] {
+    const env: Record<string, string> = {
+      ...process.env,
+      CLAUDELIKE_STATUS_DIR: statusDir,
+      HOME: fakeHome,
+      USERPROFILE: fakeHome,
+    };
+    delete env.CLAUDELIKE_BAR_NAME;
+    delete env.CLAUDELIKE_BAR_STRICT; // STRICT default-on
+    Object.assign(env, extraEnv); // caller overrides win
+    spawnSync('node', [HOOK_PATH], { input: stdin, env, encoding: 'utf8' });
+    return fs.readdirSync(statusDir).filter((f) => f.endsWith('.json'));
+  }
+
+  function writeIndex(map: Record<string, string>): void {
+    fs.mkdirSync(path.join(fakeHome, '.claude'), { recursive: true });
+    fs.writeFileSync(
+      path.join(fakeHome, '.claude', 'claudelike-bar-paths.json'),
+      JSON.stringify(map),
+    );
+  }
+
+  it('writes NOTHING for an unregistered cwd (no env, no index)', () => {
+    const files = runStrict(
+      JSON.stringify({ hook_event_name: 'Stop', cwd: path.join(fakeHome, 'random', 'sub') }),
+    );
+    expect(files).toHaveLength(0);
+  });
+
+  it('still writes when CLAUDELIKE_BAR_NAME is set', () => {
+    const files = runStrict(
+      JSON.stringify({ hook_event_name: 'Stop', cwd: path.join(fakeHome, 'whatever') }),
+      { CLAUDELIKE_BAR_NAME: 'explicit-slug' },
+    );
+    expect(files).toEqual(['explicit-slug.json']);
+  });
+
+  it('resolves a subdir to its project via ancestor-walk of the path index', () => {
+    const projectDir = path.join(fakeHome, 'projects', 'my-app');
+    writeIndex({ [projectDir]: 'my-app' });
+    const files = runStrict(
+      JSON.stringify({ hook_event_name: 'Stop', cwd: path.join(projectDir, 'src', 'deep') }),
+    );
+    expect(files).toEqual(['my-app.json']);
   });
 });

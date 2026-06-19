@@ -214,6 +214,30 @@ const DEFAULT_IGNORED_TEXTS = [
 
 const DEFAULT_CONTEXT_THRESHOLDS: ContextThresholds = { warn: 30, crit: 50 };
 
+/**
+ * True when `ancestor` is a strict parent directory of `descendant` (i.e.
+ * `descendant` lives somewhere under `ancestor`, and they are not equal).
+ * Both arguments are expected to be normalized with no trailing separator.
+ * Accepts either POSIX or Windows separators so the check is layout-agnostic.
+ */
+export function isStrictAncestor(ancestor: string, descendant: string): boolean {
+  if (ancestor === descendant) return false;
+  return descendant.startsWith(ancestor + '/') || descendant.startsWith(ancestor + '\\');
+}
+
+/**
+ * True for terminal names that are transient VS Code states rather than real
+ * project identities — empty/whitespace, or a spinner/"Configuring…" style
+ * title ending in an ellipsis (… or ...). Used to keep such names out of the
+ * persisted config so they don't survive as dead registered tiles.
+ */
+export function isTransientTerminalName(name: string): boolean {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return true;
+  if (trimmed.endsWith('…') || trimmed.endsWith('...')) return true;
+  return false;
+}
+
 export class ConfigManager implements vscode.Disposable {
   private config: ConfigFile = { terminals: {} };
   private configPath: string;
@@ -568,6 +592,11 @@ export class ConfigManager implements vscode.Disposable {
    */
   ensureEntry(name: string): void {
     if (this.config.terminals[name]) return;
+    // Config-list hygiene: don't persist transient terminal titles. VS Code
+    // briefly names a terminal after its running command or a spinner state
+    // ("Configuring…"), and an empty/whitespace name is never a real project.
+    // Persisting these leaves dead registered tiles after the moment passes.
+    if (isTransientTerminalName(name)) return;
 
     this.config.terminals[name] = {
       color: getDefaultColor(name),
@@ -946,12 +975,31 @@ export class ConfigManager implements vscode.Disposable {
    * manual terminals (those without CLAUDELIKE_BAR_NAME env var).
    */
   private writePathIndex(): void {
-    const index: Record<string, string> = {};
+    // Collect normalized absolute paths (no trailing separator) → slug.
+    const entries: Array<{ path: string; slug: string }> = [];
     for (const [slug, cfg] of Object.entries(this.config.terminals)) {
       if (cfg.path && typeof cfg.path === 'string') {
         const normalized = cfg.path.replace(/[/\\]+$/, '') || cfg.path;
-        index[normalized] = slug;
+        entries.push({ path: normalized, slug });
       }
+    }
+    // Status-File Contract v1 §B (index hygiene): the hook resolves a slug by
+    // walking cwd up to the filesystem root and taking the nearest indexed
+    // ancestor. So a broad entry (e.g. a bare "/workspace" → "Shell") would
+    // capture EVERY project beneath it — every subdir terminal would resolve to
+    // that catch-all slug and STRICT-skip could never fire under it, defeating
+    // the junk cleanup. Drop any path that is a strict ancestor of another
+    // indexed path; keep the specific leaf entries. Layout-agnostic (no
+    // hardcoded roots), so the dropped entry won't re-add itself. The real
+    // catch-all terminal still resolves via its CLAUDELIKE_BAR_NAME env on
+    // launch, which takes priority over the index.
+    const index: Record<string, string> = {};
+    for (const { path: p, slug } of entries) {
+      const isAncestorOfAnother = entries.some(
+        (other) => other.path !== p && isStrictAncestor(p, other.path),
+      );
+      if (isAncestorOfAnother) continue;
+      index[p] = slug;
     }
     const dest = pathIndexPath();
     const tmp = `${dest}.tmp.${process.pid}`;

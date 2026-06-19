@@ -2,6 +2,11 @@
 
 All notable changes to **Claudelike Bar** are documented here. Versions follow [semantic versioning](https://semver.org/); dates are ISO-8601.
 
+## [0.20.2] — 2026-06-19
+
+### Fixed
+- **Broadcast no longer rate-limits Claude (#68).** Broadcasting to all tracked terminals previously submitted every session's turn in the same instant, tripping the API rate limit. Sends are now staggered by `broadcastStaggerMs` (default 1000ms; set to `0` for the old instant fan-out) and run under a progress notification. Per-terminal failures are still isolated and tallied; an all-failed broadcast now surfaces a clear warning.
+
 ## [0.20.1] — 2026-06-11
 
 Shipped together as the first stable release since 0.18.2, folding in everything from the 0.19.x organizer line and the 0.20.0 broadcast feature.

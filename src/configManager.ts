@@ -193,12 +193,23 @@ export interface ConfigFile {
    * Default false (toast still pending).
    */
   seenPinClearedNotice?: boolean;
+  /**
+   * v0.20.2 (#68) — milliseconds to wait between each send when broadcasting
+   * to all tracked terminals. Broadcasting fans a prompt out to every live
+   * session at once; firing them in the same instant submits N turns
+   * simultaneously and trips Claude's API rate limit. Spacing the sends
+   * spreads the submissions over (N-1)×stagger ms. Default 1000. Set to 0 to
+   * fire them all instantly (the pre-0.20.2 behavior).
+   */
+  broadcastStaggerMs?: number;
   terminals: Record<string, TerminalConfig>;
 }
 
 const AUDIO_FILENAME_RE = /^[a-zA-Z0-9._-]+$/;
 const DEFAULT_AUDIO_VOLUME = 0.6;
 const DEFAULT_AUDIO_DEBOUNCE_MS = 150;
+// v0.20.2 (#68) — default inter-send delay for broadcast fan-out.
+const DEFAULT_BROADCAST_STAGGER_MS = 1000;
 
 const CONFIG_FILENAME = '.claudelike-bar.jsonc';
 const LEGACY_CONFIG_FILENAME = '.claudelike-bar.json';
@@ -873,6 +884,17 @@ export class ConfigManager implements vscode.Disposable {
 
   getShowRegisteredProjects(): boolean {
     return this.config.showRegisteredProjects !== false;
+  }
+
+  /**
+   * v0.20.2 (#68) — inter-send delay (ms) for broadcast fan-out. Clamped to
+   * a finite, non-negative number; anything else falls back to the default.
+   */
+  getBroadcastStaggerMs(): number {
+    const v = this.config.broadcastStaggerMs;
+    return typeof v === 'number' && Number.isFinite(v) && v >= 0
+      ? v
+      : DEFAULT_BROADCAST_STAGGER_MS;
   }
 
   /**

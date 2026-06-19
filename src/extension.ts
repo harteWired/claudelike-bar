@@ -15,6 +15,7 @@ import {
 } from './statusline';
 import { executeRegisterProjectCommand } from './registerProject';
 import { executeLaunchProjectCommand, launchRegisteredProject, cwdExists } from './launchProject';
+import { broadcastStaggered, BroadcastTarget } from './broadcast';
 import { showOnboardingNotification, isSetupComplete } from './onboarding';
 import { executeRemoveLegacyHooksCommand, maybePromptLegacyHookCleanup } from './legacyHooks';
 import { executeDiagnoseCommand, maybeToastDiagnostics } from './diagnostics';
@@ -170,26 +171,47 @@ export function activate(context: vscode.ExtensionContext) {
       if (text.length === 0) return; // empty — treat as cancel, don't persist
       await context.globalState.update(BROADCAST_LAST_KEY, text);
 
-      const tally: Record<string, number> = {};
-      const hitNames: string[] = [];
-      const failures: string[] = [];
+      // Collect targets first so the fan-out is a flat list we can stagger.
+      const targets: BroadcastTarget[] = [];
       tracker.forEachTrackedTerminal((term, tile) => {
-        try {
-          term.sendText(text, true);
-          tally[tile.status] = (tally[tile.status] ?? 0) + 1;
-          hitNames.push(tile.name);
-        } catch (err) {
-          failures.push(`${tile.name}: ${err instanceof Error ? err.message : String(err)}`);
-        }
+        targets.push({
+          name: tile.name,
+          status: tile.status,
+          send: () => term.sendText(text, true),
+        });
       });
 
-      const total = hitNames.length;
-      if (total === 0) {
+      if (targets.length === 0) {
         vscode.window.showInformationMessage(
           'Claudelike Bar: no tracked terminals to broadcast to.',
         );
         return;
       }
+
+      // #68 — space the sends out so we don't submit every session's turn in
+      // the same instant and trip the API rate limit. Run under a progress
+      // notification since a staggered fan-out over many terminals takes a few
+      // seconds. `broadcastStaggerMs: 0` restores the instant fan-out.
+      const staggerMs = configManager.getBroadcastStaggerMs();
+      const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+      const { tally, hitNames, failures } = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Broadcasting to ${targets.length} terminal${targets.length === 1 ? '' : 's'}…`,
+          cancellable: false,
+        },
+        (progress) =>
+          broadcastStaggered(targets, staggerMs, {
+            sleep,
+            onProgress: (done, totalN, name) =>
+              progress.report({
+                increment: 100 / totalN,
+                message: `${done}/${totalN} (${name})`,
+              }),
+          }),
+      );
+
+      const total = hitNames.length;
 
       // Always log — broadcast is a user-explicit action, not background noise,
       // so the line lands even when debug mode is off. Per-state breakdown
@@ -203,6 +225,14 @@ export function activate(context: vscode.ExtensionContext) {
       );
       if (failures.length > 0) {
         output.appendLine(`  failures: ${failures.join('; ')}`);
+      }
+
+      if (total === 0) {
+        // Every send threw (e.g. terminals disposed during the staggered run).
+        vscode.window.showWarningMessage(
+          `Claudelike Bar: broadcast reached no terminals — all ${failures.length} send${failures.length === 1 ? '' : 's'} failed (see the "Claudelike Bar" output channel).`,
+        );
+        return;
       }
 
       vscode.window.showInformationMessage(

@@ -153,6 +153,27 @@ An empty result after sanitize is treated as "no slug": STRICT skips, legacy use
 
 ---
 
+## §E — Activation-time GC (item C)
+
+STRICT (§B) stops *new* junk from being minted, but the status dir can still hold orphans
+from before the cutover, or `<slug>.json` for terminals that are long gone. The reader side
+(`src/statusWatcher.ts` `sweepOrphanStatusFiles`) sweeps these on activation.
+
+- **Reaped** (only when older than the stale window, default **24h**): `<slug>.json` whose
+  slug is **not** in the §B allowlist (the path index), plus `*.tmp.<pid>` atomic-write
+  orphans left by a crashed writer.
+- **Kept regardless of age:** any slug in the allowlist (registered / path-bearing /
+  autoStart terminals).
+- **The mtime guard is the safety net.** An active terminal — even one tracked only by
+  `CLAUDELIKE_BAR_NAME`, with no path-index entry — refreshes its file on every hook event,
+  so it is never stale and never reaped.
+- **Out of scope:** non-JSON files (`.debug`, `debug.log`) are never touched — `debug.log`
+  is belfry's to rotate.
+- **Fail safe:** if the allowlist can't be read (missing/unparseable index), GC is skipped
+  entirely rather than risk over-reaping. GC is best-effort and never blocks activation.
+
+---
+
 ## Canonical decisions (frozen)
 
 - `CLAUDELIKE_STATUS_DIR` is the canonical env var; `CLAUDE_DASHBOARD_DIR` is a
@@ -172,5 +193,6 @@ An empty result after sanitize is treated as "no slug": STRICT skips, legacy use
 | §B index writer (allowlist) | `src/configManager.ts` `writePathIndex` | — (reads the same index) |
 | §C sanitize | hook + extension | `lib/slug.js` |
 | §D atomic + read-merge | hook + `src/statusWatcher.ts` | `bin/belfry-hook.js` `writeAtomic` |
+| §E activation-time GC | `src/statusWatcher.ts` `sweepOrphanStatusFiles` | — (belfry rotates its own `debug.log`) |
 
 Historical design notes: [`drafts/ancestor-walk-patch-draft.md`](drafts/ancestor-walk-patch-draft.md).

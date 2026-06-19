@@ -43,8 +43,8 @@ See [`hooks/dashboard-status.js`](https://github.com/harteWired/claudelike-bar/b
 - Reads the Claude Code hook JSON payload from stdin
 - Extracts `hook_event_name`, `cwd`, and (when present) `tool_name`, `agent_type`, `error_type`, `notification_type`
 - Maps the event to a raw status signal (`working`, `ready`, `error`, `subagent_start`, `subagent_stop`, or `teammate_idle`)
-- Derives the project name from `$CLAUDELIKE_BAR_NAME` env var or `basename(cwd)`
-- Sanitizes the project name (strips POSIX path separators and Windows-reserved chars)
+- Derives the project slug per [Status-File Contract v1 §B](STATUS-FILE-CONTRACT.md): `$CLAUDELIKE_BAR_NAME` env → ancestor-walk of the path index → STRICT skip (an unregistered directory writes **nothing** rather than minting a `basename(cwd)` junk file). `CLAUDELIKE_BAR_STRICT=0` restores the legacy basename fallback.
+- Sanitizes the slug (strips POSIX path separators and Windows-reserved chars) — byte-identical across the hook, the extension, and belfry (§C)
 - Read-merge-writes the status file so the statusline's `context_percent` survives
 - Writes atomically via `rename` — no partial-JSON reads by the extension's watcher
 - Never throws — a failing hook must never fail Claude's execution
@@ -52,7 +52,7 @@ See [`hooks/dashboard-status.js`](https://github.com/harteWired/claudelike-bar/b
 
 ## The status file
 
-Example contents (`~/Library/Caches/.../claude-dashboard/my-project.json` on macOS, `/tmp/claude-dashboard/my-project.json` on Linux, `%TEMP%\claude-dashboard\my-project.json` on Windows):
+Example contents (`/tmp/claude-dashboard/my-project.json` on Linux/macOS, `%TEMP%\claude-dashboard\my-project.json` on Windows — see [Contract §A](STATUS-FILE-CONTRACT.md) for the full directory-resolution order; the POSIX path is a fixed literal, not the per-process temp dir):
 
 ```json
 {
@@ -128,70 +128,18 @@ Remove all dashboard-status entries from `~/.claude/settings.json` manually (or 
 
 **What it installs:** one file and one settings entry.
 
-### The statusline script (in full)
+### The statusline script
 
-Located at `~/.claude/hooks/claudelike-statusline.js` after install:
+Located at `~/.claude/hooks/claudelike-statusline.js` after install. See
+[`hooks/claudelike-statusline.js`](https://github.com/harteWired/claudelike-bar/blob/main/hooks/claudelike-statusline.js)
+on GitHub for the current source — the same file the extension ships.
 
-```javascript
-#!/usr/bin/env node
-'use strict';
-
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-
-function sanitizeProject(name) {
-  return (name || '')
-    .replace(/[\r\n]/g, '')
-    .replace(/[\/\\:*?"<>|]/g, '_')
-    .replace(/^\.+|\.+$/g, '');
-}
-
-function main() {
-  const statusDir = process.env.CLAUDELIKE_STATUS_DIR
-    || path.join(os.tmpdir(), 'claude-dashboard');
-  fs.mkdirSync(statusDir, { recursive: true });
-
-  let input = '';
-  try {
-    if (!process.stdin.isTTY) input = fs.readFileSync(0, 'utf8');
-  } catch {}
-
-  let data = {};
-  if (input) { try { data = JSON.parse(input); } catch {} }
-
-  const model = data.model?.display_name || '';
-  const cwd = data.workspace?.current_dir || data.cwd || process.cwd();
-  const ctxRaw = data.context_window?.used_percentage || 0;
-  const ctxPct = Math.max(0, Math.min(100, Math.floor(ctxRaw)));
-  const project = sanitizeProject(process.env.CLAUDELIKE_BAR_NAME || path.basename(cwd)) || 'unknown';
-
-  // Merge context_percent into existing status file (preserves hook state).
-  const statusFile = path.join(statusDir, `${project}.json`);
-  let payload = { project, timestamp: Math.floor(Date.now() / 1000) };
-  try {
-    const existing = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
-    payload = Object.assign({}, existing, payload);
-  } catch {}
-  payload.context_percent = ctxPct;
-
-  const tmpPath = `${statusFile}.tmp.${process.pid}`;
-  try {
-    fs.writeFileSync(tmpPath, JSON.stringify(payload) + '\n');
-    fs.renameSync(tmpPath, statusFile);
-  } catch { try { fs.unlinkSync(tmpPath); } catch {} }
-
-  // Minimal status line display.
-  const parts = [];
-  if (model) parts.push(model);
-  if (project && project !== 'unknown') parts.push(project);
-  parts.push(`ctx ${ctxPct}%`);
-  process.stdout.write(parts.join(' │ '));
-}
-
-try { main(); } catch {}
-process.exit(0);
-```
+It parses the statusline payload on stdin, extracts context-window usage, and
+**read-merge-writes** `context_percent` into the per-project `<slug>.json` so the
+hook's status fields survive. It resolves the status directory (§A) and the project
+slug (§B) by the **same rules as the hook** — including STRICT skip — so the two
+co-writers always agree on the file. Under STRICT, an unregistered directory writes
+no status file but the status line still prints. See [Status-File Contract v1](STATUS-FILE-CONTRACT.md).
 
 ### The settings entry
 

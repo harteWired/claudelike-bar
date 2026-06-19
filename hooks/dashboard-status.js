@@ -23,15 +23,19 @@
  *   PreToolUse, UserPromptSubmit,
  *   everything else                 → "working"
  *
- * Project-name priority:
+ * Project-name priority (Status-File Contract v1 §B):
  *   1. $CLAUDELIKE_BAR_NAME env var — explicit override set by the extension
  *      when auto-starting a terminal. Required when the terminal name doesn't
  *      match its directory (e.g. "My Staging" → ~/projects/staging).
- *   2. basename(cwd) — works on any system regardless of layout.
+ *   2. Ancestor-walk of the path index (~/.claude/claudelike-bar-paths.json):
+ *      the nearest registered ancestor of cwd wins.
+ *   3. No match → STRICT (default) skips the write; CLAUDELIKE_BAR_STRICT=0
+ *      restores the legacy basename(cwd) mint.
  *
- * Status dir priority:
+ * Status dir priority (Status-File Contract v1 §A):
  *   1. $CLAUDELIKE_STATUS_DIR env var
- *   2. os.tmpdir()/claude-dashboard
+ *   2. $CLAUDE_DASHBOARD_DIR (deprecated alias)
+ *   3. POSIX: /tmp/claude-dashboard literal; win32: os.tmpdir()/claude-dashboard
  *
  * Debug logging: create <STATUS_DIR>/.debug to enable a trace log at
  * <STATUS_DIR>/debug.log. The extension toggles this file from config.
@@ -172,11 +176,70 @@ function extractAssistantContent(content) {
   return null;
 }
 
-function main() {
-  const statusDir = process.env.CLAUDELIKE_STATUS_DIR
-    || path.join(os.tmpdir(), 'claude-dashboard');
+// --- Status-File Contract v1 §A: status directory ------------------------
+// Canonical env var is CLAUDELIKE_STATUS_DIR; CLAUDE_DASHBOARD_DIR is honored
+// as a deprecated transition alias. The POSIX default is a FIXED literal —
+// NOT os.tmpdir() — because Claude Code sets TMPDIR=/tmp/claude-<uid> per
+// process, so an os.tmpdir() default would diverge from the convention literal
+// that the extension's watcher/GC reads (today's split-dir bug).
+function resolveStatusDir() {
+  const explicit = (process.env.CLAUDELIKE_STATUS_DIR || '').trim()
+    || (process.env.CLAUDE_DASHBOARD_DIR || '').trim();
+  if (explicit) return explicit;
+  return process.platform === 'win32'
+    ? path.join(os.tmpdir(), 'claude-dashboard')
+    : '/tmp/claude-dashboard';
+}
 
-  fs.mkdirSync(statusDir, { recursive: true });
+// --- Status-File Contract v1 §B: slug resolution -------------------------
+// Index keys are normalized absolute paths with NO trailing slash (guaranteed
+// by the extension's index writer). Walk cwd then each parent up to the
+// filesystem root; first index hit wins. This is the ancestor-walk that maps
+// subdir terminals to their real project instead of minting a basename slug.
+// No in-process parse cache: the hook is one-shot per event (fresh subprocess),
+// so caching buys nothing — matches belfry lib/slug.js's stated rationale.
+function lookupAncestor(cwd) {
+  let index;
+  try {
+    index = JSON.parse(fs.readFileSync(
+      path.join(os.homedir(), '.claude', 'claudelike-bar-paths.json'), 'utf8'));
+  } catch {
+    return ''; // no index or parse error — no match
+  }
+  if (typeof index !== 'object' || index === null) return '';
+  let dir = cwd.replace(/[/\\]+$/, '') || cwd;
+  for (;;) {
+    const hit = index[dir];
+    if (typeof hit === 'string' && hit.length > 0) return hit;
+    const parent = path.dirname(dir);
+    if (parent === dir) return ''; // reached filesystem root, no match
+    dir = parent;
+  }
+}
+
+// Resolve the dashboard slug, or null when STRICT (default) says skip the
+// write. Order: 1) CLAUDELIKE_BAR_NAME env (auto-started terminals), 2)
+// ancestor-walk of the path index, 3) no match → STRICT skips; LEGACY
+// (CLAUDELIKE_BAR_STRICT=0) restores the old basename(cwd) mint.
+function resolveSlug(cwd) {
+  const strict = process.env.CLAUDELIKE_BAR_STRICT !== '0';
+  let project = (process.env.CLAUDELIKE_BAR_NAME || '').trim();
+  if (!project) project = lookupAncestor(cwd);
+  if (!project) {
+    if (strict) return null;
+    project = path.basename(cwd);
+  }
+  // §C sanitize — byte-identical with belfry lib/slug.js and the extension.
+  project = project
+    .replace(/[\r\n]/g, '')
+    .replace(/[\/\\:*?"<>|]/g, '_')
+    .replace(/^\.+|\.+$/g, '');
+  if (!project) return strict ? null : 'unknown';
+  return project;
+}
+
+function main() {
+  const statusDir = resolveStatusDir();
 
   // Read stdin — Claude Code pipes JSON. If stdin is a TTY, skip parsing.
   let input = '';
@@ -234,36 +297,16 @@ function main() {
 
   if (!cwd) cwd = process.cwd();
 
-  // Derive project name
-  //   1. CLAUDELIKE_BAR_NAME env var (auto-started terminals)
-  //   2. Path index lookup (manual terminals with registered path)
-  //   3. basename(cwd) fallback
-  let project = process.env.CLAUDELIKE_BAR_NAME || '';
-  if (!project) {
-    try {
-      const indexPath = path.join(os.homedir(), '.claude', 'claudelike-bar-paths.json');
-      const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-      if (typeof index === 'object' && index !== null) {
-        const normalizedCwd = cwd.replace(/[/\\]+$/, '') || cwd;
-        project = index[normalizedCwd] || index[cwd] || '';
-      }
-    } catch {
-      // No index or parse error — fall through to basename
-    }
-  }
-  if (!project) {
-    project = path.basename(cwd);
-  }
+  // Derive the project slug (Contract v1 §B/§C). STRICT (default) returns null
+  // for an unregistered cwd, and we write nothing rather than minting a
+  // basename slug — the root fix for the subdir-junk files. Opt out with
+  // CLAUDELIKE_BAR_STRICT=0 (legacy basename behavior).
+  const project = resolveSlug(cwd);
+  if (project === null) return;
 
-  // Sanitize project name — strip anything that could break the filename.
-  // Covers POSIX path separators plus Windows-reserved chars (: * ? " < > |).
-  // Strip leading/trailing dots too to avoid `.json` files that are purely
-  // extensions (".json") or Windows-reserved names like `..`.
-  project = project
-    .replace(/[\r\n]/g, '')
-    .replace(/[\/\\:*?"<>|]/g, '_')
-    .replace(/^\.+|\.+$/g, '');
-  if (!project) project = 'unknown';
+  // Create the status dir only once we know we're going to write (skipped
+  // sessions leave no directory side effect).
+  fs.mkdirSync(statusDir, { recursive: true });
 
   // Status resolution — the hook writes the raw state signal, the extension's
   // state machine decides what transition (if any) to apply.

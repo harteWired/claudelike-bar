@@ -40,6 +40,59 @@ function sanitizeProject(name) {
     .replace(/^\.+|\.+$/g, '');
 }
 
+// --- Status-File Contract v1 §A: status directory ------------------------
+// Byte-identical with dashboard-status.js and belfry-hook. POSIX default is a
+// FIXED literal — NOT os.tmpdir() — because Claude Code sets TMPDIR per process,
+// so an os.tmpdir() default would write context_percent into a different dir
+// than the extension's watcher reads.
+function resolveStatusDir() {
+  const explicit = (process.env.CLAUDELIKE_STATUS_DIR || '').trim()
+    || (process.env.CLAUDE_DASHBOARD_DIR || '').trim();
+  if (explicit) return explicit;
+  return process.platform === 'win32'
+    ? path.join(os.tmpdir(), 'claude-dashboard')
+    : '/tmp/claude-dashboard';
+}
+
+// --- Status-File Contract v1 §B: slug resolution -------------------------
+// Ancestor-walk of the path index; first hit up the tree wins. Mirrors
+// dashboard-status.js so the statusline writes context_percent to the SAME
+// <slug>.json the hook writes status to.
+function lookupAncestor(cwd) {
+  let index;
+  try {
+    index = JSON.parse(fs.readFileSync(
+      path.join(os.homedir(), '.claude', 'claudelike-bar-paths.json'), 'utf8'));
+  } catch {
+    return '';
+  }
+  if (typeof index !== 'object' || index === null) return '';
+  let dir = cwd.replace(/[/\\]+$/, '') || cwd;
+  for (;;) {
+    const hit = index[dir];
+    if (typeof hit === 'string' && hit.length > 0) return hit;
+    const parent = path.dirname(dir);
+    if (parent === dir) return '';
+    dir = parent;
+  }
+}
+
+// Resolve the dashboard slug, or null when STRICT (default) says skip the write.
+// 1) CLAUDELIKE_BAR_NAME env, 2) ancestor-walk index, 3) no match → STRICT skips
+// (no junk context file); CLAUDELIKE_BAR_STRICT=0 restores legacy basename.
+function resolveSlug(cwd) {
+  const strict = process.env.CLAUDELIKE_BAR_STRICT !== '0';
+  let project = (process.env.CLAUDELIKE_BAR_NAME || '').trim();
+  if (!project) project = lookupAncestor(cwd);
+  if (!project) {
+    if (strict) return null;
+    project = path.basename(cwd);
+  }
+  project = sanitizeProject(project);
+  if (!project) return strict ? null : 'unknown';
+  return project;
+}
+
 // Write a line to <statusDir>/debug.log when the .debug flag file exists.
 // Stays silent otherwise — the statusline must never throw or pollute stdout.
 function debugLog(statusDir, line) {
@@ -55,12 +108,7 @@ function debugLog(statusDir, line) {
 }
 
 function main() {
-  const statusDir = process.env.CLAUDELIKE_STATUS_DIR
-    || path.join(os.tmpdir(), 'claude-dashboard');
-  try { fs.mkdirSync(statusDir, { recursive: true }); } catch (err) {
-    debugLog(statusDir, `mkdir failed: ${err && err.message}`);
-    return;
-  }
+  const statusDir = resolveStatusDir();
 
   let input = '';
   try {
@@ -86,28 +134,41 @@ function main() {
   const haveCtx = data.context_window && typeof data.context_window.used_percentage === 'number';
   const ctxPct = haveCtx ? Math.max(0, Math.min(100, Math.floor(data.context_window.used_percentage))) : null;
 
-  const project = sanitizeProject(process.env.CLAUDELIKE_BAR_NAME || path.basename(cwd)) || 'unknown';
+  // §B slug resolution. STRICT (default) returns null for an unregistered cwd —
+  // we skip the status-file write entirely (no junk context file) but still
+  // print the status line below.
+  let project = resolveSlug(cwd);
 
-  // Merge context_percent into existing status file (if any), else start fresh.
-  const statusFile = path.join(statusDir, `${project}.json`);
-  let payload = { project, timestamp: Math.floor(Date.now() / 1000) };
-  try {
-    const existing = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
-    // Keep existing fields, overwrite only what we set.
-    payload = Object.assign({}, existing, payload);
-  } catch {}
-  if (ctxPct !== null) {
-    payload.context_percent = ctxPct;
+  if (project !== null) {
+    // Create the dir only once we know we're going to write (skipped sessions
+    // leave no directory side effect).
+    try { fs.mkdirSync(statusDir, { recursive: true }); } catch (err) {
+      debugLog(statusDir, `mkdir failed: ${err && err.message}`);
+      project = null; // fall through to status-line output without writing
+    }
   }
 
-  // Atomic write via rename — same technique as the hook script.
-  const tmpPath = `${statusFile}.tmp.${process.pid}`;
-  try {
-    fs.writeFileSync(tmpPath, JSON.stringify(payload) + '\n');
-    fs.renameSync(tmpPath, statusFile);
-  } catch (err) {
-    debugLog(statusDir, `atomic write to ${statusFile} failed: ${err && err.message}`);
-    try { fs.unlinkSync(tmpPath); } catch {}
+  if (project !== null) {
+    // §D read-merge-write: keep existing fields (hook-owned status/event/…),
+    // overwrite only what the statusline owns.
+    const statusFile = path.join(statusDir, `${project}.json`);
+    let payload = { project, timestamp: Math.floor(Date.now() / 1000) };
+    try {
+      const existing = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
+      payload = Object.assign({}, existing, payload);
+    } catch {}
+    if (ctxPct !== null) {
+      payload.context_percent = ctxPct;
+    }
+
+    const tmpPath = `${statusFile}.tmp.${process.pid}`;
+    try {
+      fs.writeFileSync(tmpPath, JSON.stringify(payload) + '\n');
+      fs.renameSync(tmpPath, statusFile);
+    } catch (err) {
+      debugLog(statusDir, `atomic write to ${statusFile} failed: ${err && err.message}`);
+      try { fs.unlinkSync(tmpPath); } catch {}
+    }
   }
 
   // Output a minimal status line for Claude Code to display in the terminal.
@@ -124,9 +185,7 @@ try { main(); } catch (err) {
   // debug on they get the reason. Fall back to tmpdir() in case the
   // failure happened before statusDir was resolved.
   try {
-    const dir = process.env.CLAUDELIKE_STATUS_DIR
-      || path.join(os.tmpdir(), 'claude-dashboard');
-    debugLog(dir, `main() threw: ${err && err.stack ? err.stack : err}`);
+    debugLog(resolveStatusDir(), `main() threw: ${err && err.stack ? err.stack : err}`);
   } catch {}
 }
 process.exit(0);

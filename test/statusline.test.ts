@@ -409,7 +409,9 @@ describe('claudelike-statusline.js script (stdin → status file + display)', ()
     delete parentEnv.CLAUDELIKE_BAR_NAME;
     const result = spawnSync('node', [STATUSLINE_PATH], {
       input: stdin,
-      env: { ...parentEnv, CLAUDELIKE_STATUS_DIR: tmpDir, ...env },
+      // These tests assert basename-derived slugs (predate STRICT); run them in
+      // legacy mode. STRICT skip is mode-independent and covered in hook.test.ts.
+      env: { ...parentEnv, CLAUDELIKE_STATUS_DIR: tmpDir, CLAUDELIKE_BAR_STRICT: '0', ...env },
       encoding: 'utf8',
     });
     return { stdout: result.stdout, exitCode: result.status };
@@ -426,6 +428,20 @@ describe('claudelike-statusline.js script (stdin → status file + display)', ()
     const data = JSON.parse(fs.readFileSync(statusFile, 'utf8'));
     expect(data.context_percent).toBe(42);
     expect(data.project).toBe('my-app');
+  });
+
+  it('STRICT (default): writes no status file for an unregistered cwd but still prints the line', () => {
+    const stdin = JSON.stringify({
+      model: { display_name: 'Claude Opus 4.8' },
+      workspace: { current_dir: path.join(tmpDir, 'unregistered') },
+      context_window: { used_percentage: 30 },
+    });
+    const { stdout } = run(stdin, { CLAUDELIKE_BAR_STRICT: '1' });
+    // No junk context file minted under STRICT...
+    expect(fs.readdirSync(tmpDir).filter((f) => f.endsWith('.json'))).toHaveLength(0);
+    // ...but the status line still renders (model + ctx, no project).
+    expect(stdout).toContain('Claude Opus 4.8');
+    expect(stdout).toContain('ctx 30%');
   });
 
   it('outputs a minimal display line including context %', () => {
@@ -579,7 +595,7 @@ describe('dashboard-status.js hook (context_percent preservation)', () => {
     delete parentEnv.CLAUDELIKE_BAR_NAME;
     spawnSync('node', [HOOK_PATH], {
       input: stdin,
-      env: { ...parentEnv, CLAUDELIKE_STATUS_DIR: tmpDir },
+      env: { ...parentEnv, CLAUDELIKE_STATUS_DIR: tmpDir, CLAUDELIKE_BAR_STRICT: '0' },
       encoding: 'utf8',
     });
 

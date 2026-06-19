@@ -1,5 +1,13 @@
 # Project Identity Architecture — Options
 
+> **Status update:** the slug/status-file half of this plan has shipped. Project
+> identity now follows [Status-File Contract v1](STATUS-FILE-CONTRACT.md): the hook
+> resolves a slug via `$CLAUDELIKE_BAR_NAME` → an **ancestor-walk of the path index**
+> → **STRICT skip** (no `basename(cwd)` fallback by default), and the status directory
+> is the fixed literal `/tmp/claude-dashboard` (§A). The `basename(cwd)` behavior
+> described below is the *old* default, kept here for historical context and now only
+> reachable via the `CLAUDELIKE_BAR_STRICT=0` legacy escape hatch.
+
 **Issue:** [#6](https://github.com/harteWired/claudelike-bar/issues/6) — extension assumes all projects live under the workspace root.
 
 ## Problem Summary

@@ -3,41 +3,66 @@ import * as os from 'os';
 import * as path from 'path';
 import { getStatusDir } from '../src/statusDir';
 
-describe('getStatusDir', () => {
-  const originalEnv = process.env.CLAUDELIKE_STATUS_DIR;
+// Status-File Contract v1 §A. The POSIX default is a FIXED literal — NOT
+// os.tmpdir() — because Claude Code sets TMPDIR per process; an os.tmpdir()
+// default would diverge between writers and readers.
+describe('getStatusDir (Contract §A)', () => {
+  const original = {
+    status: process.env.CLAUDELIKE_STATUS_DIR,
+    dashboard: process.env.CLAUDE_DASHBOARD_DIR,
+  };
 
   beforeEach(() => {
     delete process.env.CLAUDELIKE_STATUS_DIR;
+    delete process.env.CLAUDE_DASHBOARD_DIR;
   });
 
   afterEach(() => {
-    if (originalEnv === undefined) {
-      delete process.env.CLAUDELIKE_STATUS_DIR;
-    } else {
-      process.env.CLAUDELIKE_STATUS_DIR = originalEnv;
+    for (const [key, val] of [
+      ['CLAUDELIKE_STATUS_DIR', original.status],
+      ['CLAUDE_DASHBOARD_DIR', original.dashboard],
+    ] as const) {
+      if (val === undefined) delete process.env[key];
+      else process.env[key] = val;
     }
   });
 
-  it('returns os.tmpdir()/claude-dashboard by default', () => {
-    expect(getStatusDir()).toBe(path.join(os.tmpdir(), 'claude-dashboard'));
+  const expectedDefault =
+    process.platform === 'win32'
+      ? path.join(os.tmpdir(), 'claude-dashboard')
+      : '/tmp/claude-dashboard';
+
+  it('defaults to the POSIX literal /tmp/claude-dashboard (os.tmpdir only on win32)', () => {
+    expect(getStatusDir()).toBe(expectedDefault);
+    if (process.platform !== 'win32') {
+      expect(getStatusDir()).toBe('/tmp/claude-dashboard');
+    }
   });
 
-  it('honors CLAUDELIKE_STATUS_DIR env override', () => {
+  it('honors CLAUDELIKE_STATUS_DIR override', () => {
     process.env.CLAUDELIKE_STATUS_DIR = '/custom/path';
     expect(getStatusDir()).toBe('/custom/path');
   });
 
-  it('falls back to default when env var is empty string', () => {
-    process.env.CLAUDELIKE_STATUS_DIR = '';
-    expect(getStatusDir()).toBe(path.join(os.tmpdir(), 'claude-dashboard'));
+  it('honors the deprecated CLAUDE_DASHBOARD_DIR alias', () => {
+    process.env.CLAUDE_DASHBOARD_DIR = '/legacy/path';
+    expect(getStatusDir()).toBe('/legacy/path');
   });
 
-  it('returns a cross-platform path (no hardcoded /tmp/)', () => {
-    // On Linux os.tmpdir() is usually /tmp, on macOS it's /var/folders/...,
-    // on Windows it's C:\Users\...\AppData\Local\Temp. The key guarantee is
-    // that it reflects the current OS's temp dir, not a hardcoded /tmp.
-    const result = getStatusDir();
-    expect(result).toContain('claude-dashboard');
-    expect(result).toContain(os.tmpdir());
+  it('prefers CLAUDELIKE_STATUS_DIR over the CLAUDE_DASHBOARD_DIR alias', () => {
+    process.env.CLAUDELIKE_STATUS_DIR = '/canonical';
+    process.env.CLAUDE_DASHBOARD_DIR = '/legacy';
+    expect(getStatusDir()).toBe('/canonical');
+  });
+
+  it('falls back to the default when env vars are empty or whitespace', () => {
+    process.env.CLAUDELIKE_STATUS_DIR = '';
+    process.env.CLAUDE_DASHBOARD_DIR = '   ';
+    expect(getStatusDir()).toBe(expectedDefault);
+  });
+
+  it('trims surrounding whitespace on an explicit override', () => {
+    process.env.CLAUDELIKE_STATUS_DIR = '  /spaced/dir  ';
+    expect(getStatusDir()).toBe('/spaced/dir');
   });
 });

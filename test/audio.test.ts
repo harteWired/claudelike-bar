@@ -289,15 +289,29 @@ describe('AudioPlayer debounce', () => {
     fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it('three tiles flipping to ready inside the debounce window coalesce into one play', async () => {
+  it('three DIFFERENT tiles flipping to ready in the window each get a chime (#33)', async () => {
+    // Pre-#33 the debounce was keyed on the resolved filename, so three tiles
+    // sharing one sound collapsed to a single play and a user watching a
+    // specific tile saw a dropped cue. Keyed per-tile, every tile chimes.
     for (const n of ['a', 'b', 'c']) {
       tracker.updateStatus(n, 'working', 'UserPromptSubmit');
       tracker.updateStatus(n, 'ready', 'Stop');
     }
     // Wait past the debounce window.
     await new Promise((r) => setTimeout(r, 80));
+    expect(plays.length).toBe(3);
+    expect(plays.every((p) => p.filename === 'chime.mp3')).toBe(true);
+  });
+
+  it('rapid repeat readies on the SAME tile still coalesce into one play', async () => {
+    // The debounce still swallows a single tile's duplicate fires inside the
+    // window — only cross-tile coalescing was the bug.
+    tracker.updateStatus('a', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('a', 'ready', 'Stop');
+    tracker.updateStatus('a', 'working', 'UserPromptSubmit');
+    tracker.updateStatus('a', 'ready', 'Stop');
+    await new Promise((r) => setTimeout(r, 80));
     expect(plays.length).toBe(1);
-    expect(plays[0].filename).toBe('chime.mp3');
   });
 });
 

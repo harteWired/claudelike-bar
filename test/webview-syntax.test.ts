@@ -120,3 +120,54 @@ describe('organizer.js dropPreview (#49)', () => {
     expect(dropPreview('auto', 'pinned', true, '')).toBe(null);
   });
 });
+
+/**
+ * #54 — webview discards stale chimes so a suspend→resume burst of queued play
+ * messages doesn't replay as a pile of old alerts. `isChimeFresh` is the pure
+ * gate; the webview exposes it on globalThis for this test.
+ */
+describe('webview.js isChimeFresh (#54)', () => {
+  let isChimeFresh: (message: any, now: number) => boolean;
+
+  beforeAll(() => {
+    const file = path.resolve(__dirname, '../media/webview.js');
+    const source = fs.readFileSync(file, 'utf8');
+    // Stub the webview-only globals so the top-level code evaluates under Node.
+    const stub = `
+      const acquireVsCodeApi = () => ({ postMessage: () => {} });
+      const document = {
+        getElementById: () => null,
+        addEventListener: () => {},
+        querySelector: () => null,
+        querySelectorAll: () => [],
+        createElement: () => ({
+          appendChild: () => {},
+          classList: { add: () => {}, remove: () => {}, contains: () => false },
+          addEventListener: () => {},
+          setAttribute: () => {},
+          dataset: {},
+          style: { setProperty: () => {} },
+        }),
+      };
+      const window = { addEventListener: () => {} };
+      ${source}
+    `;
+    new Function(stub)();
+    isChimeFresh = (globalThis as any).__isChimeFresh;
+  });
+
+  it('plays a fresh message (sent just now)', () => {
+    expect(isChimeFresh({ ts: 1000 }, 1000)).toBe(true);
+    expect(isChimeFresh({ ts: 1000 }, 1000 + 2999)).toBe(true);
+  });
+
+  it('discards a message older than the 3s TTL (queued while suspended)', () => {
+    expect(isChimeFresh({ ts: 1000 }, 1000 + 3001)).toBe(false);
+    expect(isChimeFresh({ ts: 1000 }, 1000 + 60_000)).toBe(false);
+  });
+
+  it('treats a message with no timestamp as fresh (older extension build)', () => {
+    expect(isChimeFresh({}, 999_999)).toBe(true);
+    expect(isChimeFresh(undefined, 999_999)).toBe(true);
+  });
+});

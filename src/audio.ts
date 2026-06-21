@@ -21,9 +21,12 @@ import { StateTransition, TransitionListener } from './types';
  *     Notification, even on the focused tile)
  *   - chosen slot has no file configured / file missing → drop + warn-once
  *
- * Debounce: simultaneous transitions on multiple tiles within `debounceMs`
- * coalesce into a single `play` per sound key. Keyed on the resolved filename
- * so the two slots can fire close together without stomping each other.
+ * Debounce: rapid repeat transitions on the SAME tile within `debounceMs`
+ * coalesce into a single `play`. Keyed on the tile name (#33) — the prior
+ * per-filename key meant two *different* tiles flipping to ready within the
+ * window collapsed into one chime, so a user watching a specific tile saw a
+ * dropped cue. Per-tile keying lets every tile that finishes get its own
+ * chime while still swallowing a single tile's duplicate fires.
  *
  * v0.14 renamed the slots from `ready`/`permission`. The config reader
  * accepts both names; this module only sees the canonical new names.
@@ -105,14 +108,16 @@ export class AudioPlayer implements vscode.Disposable {
       return;
     }
 
-    this.scheduleDebounced(chosen, audio.volume, audio.debounceMs);
+    // Key on the tile, not the filename, so concurrent ready transitions on
+    // different tiles each get a chime (#33).
+    this.scheduleDebounced(t.name, chosen, audio.volume, audio.debounceMs);
   }
 
-  private scheduleDebounced(filename: string, volume: number, debounceMs: number): void {
-    const existing = this.debounceTimers.get(filename);
+  private scheduleDebounced(key: string, filename: string, volume: number, debounceMs: number): void {
+    const existing = this.debounceTimers.get(key);
     if (existing) clearTimeout(existing);
     const timer = setTimeout(() => {
-      this.debounceTimers.delete(filename);
+      this.debounceTimers.delete(key);
       try {
         this.postTarget.postPlay(filename, volume);
         this.log(() => `audio: play ${filename} @ vol ${volume}`);
@@ -120,7 +125,7 @@ export class AudioPlayer implements vscode.Disposable {
         this.log(() => `audio: postPlay failed — ${err instanceof Error ? err.message : String(err)}`);
       }
     }, debounceMs);
-    this.debounceTimers.set(filename, timer);
+    this.debounceTimers.set(key, timer);
   }
 
   /** Reset the "warn-once" memory — useful after the user edits the config. */

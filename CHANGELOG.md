@@ -2,6 +2,14 @@
 
 All notable changes to **Claudelike Bar** are documented here. Versions follow [semantic versioning](https://semver.org/); dates are ISO-8601.
 
+## [0.20.3] — 2026-06-20
+
+### Fixed
+- **Hand-edited config deletions no longer reappear (#63).** `save()` now does a 3-way merge against a snapshot of the last-synced on-disk state, so an entry you delete by hand stays deleted even when the file watcher misses the change (a known gap on Windows). External edits and additions are adopted too, instead of being silently overwritten by stale in-memory state.
+- **Fresh terminals no longer show a previous session's context usage (#43).** `context_percent` (owned by the statusline module) was riding through the hook's read-merge-write across a fresh `SessionStart`, so a VS Code restart could paint a prior session's used-context onto a brand-new tile. The hook now drops it on a fresh session start/end, and the extension ignores a stale value on those events as a backstop.
+- **Audio chimes no longer drop when multiple tiles finish at once (#33).** The chime debounce was keyed on the sound filename, so several tiles sharing one sound and finishing within the debounce window collapsed into a single chime. It's now keyed per-tile — every tile that finishes gets its cue, while a single tile's rapid repeats still coalesce.
+- **Audio chimes no longer burst-replay on Windows (#54).** Play messages are timestamped; the webview discards any older than 3s, so chimes that queued while the webview was suspended/throttled (background renderer, collapsed sidebar) are dropped instead of firing in a stale pile when it resumes.
+
 ## [0.20.2] — 2026-06-19
 
 ### Fixed

@@ -169,6 +169,13 @@ export interface AudioPlayMessage {
   type: 'play';
   url: string;
   volume: number;
+  /**
+   * v0.20.2 (#54) — wall-clock send time (ms). The webview discards a play
+   * message older than its TTL so chimes queued while the webview was
+   * suspended/throttled (Windows background renderer) don't burst-replay as a
+   * pile of stale alerts when it resumes.
+   */
+  ts: number;
 }
 
 export interface StatusFileData {

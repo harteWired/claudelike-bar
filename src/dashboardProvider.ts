@@ -94,6 +94,7 @@ export class DashboardProvider implements vscode.WebviewViewProvider {
       type: 'play',
       url,
       volume,
+      ts: Date.now(),
     };
     this.view.webview.postMessage(msg);
   }

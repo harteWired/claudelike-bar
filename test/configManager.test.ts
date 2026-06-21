@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { parse as parseJsonc } from 'jsonc-parser';
 import { ConfigManager } from '../src/configManager';
 
 /**
@@ -707,5 +708,131 @@ describe('ConfigManager.getBroadcastStaggerMs (#68)', () => {
   it('falls back to the default for invalid (negative / non-finite / non-number) values', () => {
     expect(makeCm({ broadcastStaggerMs: -500, terminals: {} }).getBroadcastStaggerMs()).toBe(1000);
     expect(makeCm({ broadcastStaggerMs: 'fast' as any, terminals: {} }).getBroadcastStaggerMs()).toBe(1000);
+  });
+});
+
+/**
+ * #63 — save()'s 3-way merge. The bug: the old additive merge made in-memory
+ * state always win, so an entry the user hand-deleted from the file got
+ * resurrected on the next save whenever the watcher reload that should have
+ * caught the deletion didn't fire (Windows debounce). These tests simulate
+ * that exact case: the vscode mock's FileSystemWatcher never fires, so an
+ * external edit followed by an in-app mutation goes straight through save()
+ * with no reload in between.
+ */
+describe('ConfigManager.save 3-way merge (#63)', () => {
+  let tmpDir: string;
+  let configFile: string;
+  let cm: ConfigManager;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cm-merge-test-'));
+    configFile = path.join(tmpDir, '.claudelike-bar.jsonc');
+    (vscode.workspace as any).workspaceFolders = [
+      { uri: (vscode.Uri as any).file(tmpDir), name: 'test', index: 0 },
+    ];
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    if (cm) cm.dispose();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function entry(color = 'cyan') {
+    return { color, icon: null, nickname: null, autoStart: false };
+  }
+
+  function writeFile(terminals: Record<string, object>): void {
+    fs.writeFileSync(configFile, JSON.stringify({ terminals }));
+  }
+
+  function readTerminals(): Record<string, any> {
+    // The extension writes JSONC (comment headers), so parse leniently.
+    return parseJsonc(fs.readFileSync(configFile, 'utf-8')).terminals;
+  }
+
+  // Drive the debounced save() deterministically: mutate, then advance past
+  // the 200ms write debounce so save() runs with no watcher reload between.
+  function mutateAndFlush(fn: () => void): void {
+    vi.useFakeTimers();
+    fn();
+    vi.advanceTimersByTime(250);
+    vi.useRealTimers();
+  }
+
+  it('does NOT resurrect an entry deleted on disk while a sibling is mutated', () => {
+    writeFile({ a: entry(), b: entry() });
+    cm = new ConfigManager(configFile);
+
+    // External hand-edit: delete `b` from the file. Watcher does not fire.
+    writeFile({ a: entry() });
+
+    // An unrelated in-app change to `a` triggers a save.
+    mutateAndFlush(() => cm.setColor('a', 'red'));
+
+    const disk = readTerminals();
+    expect(disk.a.color).toBe('red'); // our edit landed
+    expect(disk.b).toBeUndefined();   // deleted entry stays deleted
+    expect(cm.getAll().b).toBeUndefined();
+  });
+
+  it('keeps an entry this session added even though it is not in the on-disk baseline', () => {
+    writeFile({ a: entry() });
+    cm = new ConfigManager(configFile);
+
+    // Add a brand-new entry in-app, then save.
+    mutateAndFlush(() => cm.addProjectEntry('c', entry('green') as any));
+
+    const disk = readTerminals();
+    expect(disk.a).toBeDefined();
+    expect(disk.c.color).toBe('green'); // our addition survives the merge
+  });
+
+  it('adopts an entry added externally on disk', () => {
+    writeFile({ a: entry() });
+    cm = new ConfigManager(configFile);
+
+    // External edit adds `d`. Watcher does not fire.
+    writeFile({ a: entry(), d: entry('purple') });
+
+    mutateAndFlush(() => cm.setColor('a', 'red'));
+
+    const disk = readTerminals();
+    expect(disk.a.color).toBe('red');
+    expect(disk.d.color).toBe('purple'); // external addition is preserved
+    expect(cm.getAll().d).toBeDefined(); // and reflected in memory
+  });
+
+  it('our edit wins over a conflicting external edit to the same entry', () => {
+    writeFile({ a: entry('cyan') });
+    cm = new ConfigManager(configFile);
+
+    // External edit recolors `a` to blue; we recolor it to red. We win.
+    writeFile({ a: entry('blue') });
+    mutateAndFlush(() => cm.setColor('a', 'red'));
+
+    expect(readTerminals().a.color).toBe('red');
+  });
+
+  it('a failed write does not lose in-memory entries (rollback) and converges on retry', () => {
+    writeFile({ a: entry() });
+    cm = new ConfigManager(configFile);
+
+    // Force the next write to throw by replacing the config path with a
+    // directory (writeFileSync → EISDIR). Memory must keep the new entry, not
+    // end up half-merged and desynced from the unchanged baseline/disk.
+    fs.rmSync(configFile);
+    fs.mkdirSync(configFile);
+    mutateAndFlush(() => cm.addProjectEntry('b', entry('green') as any));
+    expect(cm.getAll().a).toBeDefined();
+    expect(cm.getAll().b).toBeDefined(); // not lost despite the failed write
+
+    // Restore writability; a subsequent save writes the full reconciled set.
+    fs.rmdirSync(configFile);
+    mutateAndFlush(() => cm.setColor('a', 'red'));
+    const disk = readTerminals();
+    expect(disk.a.color).toBe('red');
+    expect(disk.b.color).toBe('green');
   });
 });

@@ -280,8 +280,39 @@ export function isTransientTerminalName(name: string): boolean {
   return false;
 }
 
+/**
+ * v0.20.2 (#63) — stable, order-independent JSON for deep-equality of config
+ * values. Object keys are sorted recursively so two entries that differ only
+ * in key order (e.g. a hand-edit that reordered fields) still compare equal.
+ * Used by save()'s 3-way merge to tell "this session changed an entry" apart
+ * from "the file changed on disk externally."
+ */
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
+}
+
+function entryEqual(a: unknown, b: unknown): boolean {
+  return canonicalJson(a) === canonicalJson(b);
+}
+
+/** Deep clone a terminals map. Entries are plain JSON-serializable config. */
+function cloneTerminals(
+  t: Record<string, TerminalConfig>,
+): Record<string, TerminalConfig> {
+  return JSON.parse(JSON.stringify(t)) as Record<string, TerminalConfig>;
+}
+
 export class ConfigManager implements vscode.Disposable {
   private config: ConfigFile = { terminals: {} };
+  // v0.20.2 (#63) — snapshot of the terminals map as it was on disk at our
+  // last load/save. Serves as the common ancestor for save()'s 3-way merge,
+  // which is what lets externally hand-deleted entries stay deleted instead of
+  // being resurrected from stale in-memory state.
+  private lastDiskTerminals: Record<string, TerminalConfig> = {};
   private configPath: string;
   private watcher: vscode.FileSystemWatcher | undefined;
   private disposables: vscode.Disposable[] = [];
@@ -369,6 +400,15 @@ export class ConfigManager implements vscode.Disposable {
         // Any audio.* fields may have changed — drop the cache so the next
         // getAudioConfig() re-validates against the new on-disk state.
         this._audioConfigCache = undefined;
+        // v0.20.2 (#63) — snapshot the terminals map as the 3-way-merge
+        // ancestor for the next save(), but ONLY when we loaded from the
+        // canonical config path. During first-run migration loadFrom() reads a
+        // *workspace-local* candidate while save() targets the (empty) global
+        // path; snapshotting the workspace entries here would make that save's
+        // merge treat them as externally-deleted and write an empty file.
+        if (filePath === this.configPath) {
+          this.lastDiskTerminals = cloneTerminals(this.config.terminals);
+        }
       }
     } catch {
       // File is malformed — start fresh
@@ -412,6 +452,7 @@ export class ConfigManager implements vscode.Disposable {
       this.watcher.onDidDelete(() => {
         if (this.isSaving) return;
         this.config = { terminals: {} };
+        this.lastDiskTerminals = {};
         this._audioConfigCache = undefined;
         this.onChangeEmitter.fire();
       }),
@@ -946,32 +987,71 @@ export class ConfigManager implements vscode.Disposable {
       clearTimeout(this.writeDebounce);
       this.writeDebounce = undefined;
     }
-    // Read-merge-write: re-read the file from disk before writing so that
-    // concurrent changes from another VS Code window (e.g., ensureEntry
-    // from a different workspace) aren't lost. Merge our in-memory terminal
-    // entries over the disk state — our changes win on conflict, but
-    // terminals we don't know about are preserved.
-    // NOTE: only terminal entries are merged. Top-level scalar keys (mode,
-    // sortMode, labels, etc.) use last-writer-wins — the race window is
-    // narrow (between another window's write and our watcher reload) and
-    // scalar config changes are rare enough that full merge isn't justified.
+    // v0.20.2 (#63) — 3-way merge so external edits (especially hand
+    // deletions) survive a save. `lastDiskTerminals` is the common ancestor:
+    // the disk state as of our last load/save. Each key is resolved by who
+    // actually touched it — this session (vs. the ancestor) or an external
+    // editor (disk vs. the ancestor):
+    //   • we added/modified it          → our version wins
+    //   • we deleted it                 → stays deleted
+    //   • we left it alone, on disk      → take the disk version (honors
+    //                                       external edits/additions)
+    //   • we left it alone, gone on disk → external deletion, honor it
+    // The old additive merge made in-memory always win, so an entry the user
+    // deleted by hand got resurrected on the next save whenever the watcher
+    // reload that should have caught the deletion didn't fire (Windows
+    // debounce, mocked fs in tests). Scalar top-level keys (mode, sortMode,
+    // labels, …) still use last-writer-wins — that race is narrow and rare.
+    // Compute the merge into a LOCAL, then commit it to `this.config.terminals`
+    // only around the write — and roll back on a write failure. Mutating the
+    // live map before a write that then throws would leave memory half-applied
+    // and out of sync with the (unchanged) baseline and on-disk file.
+    let externalAdopted = false;
+    const preMergeTerminals = this.config.terminals;
+    let merged: Record<string, TerminalConfig> = preMergeTerminals;
     try {
+      let diskTerminals: Record<string, TerminalConfig> = {};
       if (fs.existsSync(this.configPath)) {
         const diskContent = fs.readFileSync(this.configPath, 'utf-8');
         const diskConfig = parseJsonc(diskContent);
         if (diskConfig && typeof diskConfig.terminals === 'object') {
-          // Merge: disk terminals we don't have get added to ours.
-          for (const [key, val] of Object.entries(diskConfig.terminals)) {
-            if (!this.config.terminals[key]) {
-              this.config.terminals[key] = val as TerminalConfig;
-            }
-          }
+          diskTerminals = diskConfig.terminals as Record<string, TerminalConfig>;
         }
       }
+      const baseline = this.lastDiskTerminals;
+      const mem = preMergeTerminals;
+      const out: Record<string, TerminalConfig> = {};
+      const keys = new Set([
+        ...Object.keys(diskTerminals),
+        ...Object.keys(mem),
+        ...Object.keys(baseline),
+      ]);
+      for (const key of keys) {
+        const inMem = key in mem;
+        const inBase = key in baseline;
+        const inDisk = key in diskTerminals;
+        const weAddedOrModified = inMem && (!inBase || !entryEqual(mem[key], baseline[key]));
+        const weDeleted = inBase && !inMem;
+        if (weAddedOrModified) {
+          out[key] = mem[key]; // our edit wins on keys we touched
+        } else if (weDeleted) {
+          // honor our deletion — omit
+        } else if (inDisk) {
+          // we didn't touch it — defer to disk (external edit/addition)
+          out[key] = diskTerminals[key];
+          if (!inMem || !entryEqual(diskTerminals[key], mem[key])) externalAdopted = true;
+        } else if (inMem) {
+          // not on disk, we didn't add it — external deletion; drop it
+          externalAdopted = true;
+        }
+      }
+      merged = out;
     } catch {
       // Disk read failed — proceed with in-memory state only.
     }
 
+    // Commit the merge so generateConfigText() serializes the reconciled set.
+    this.config.terminals = merged;
     const output = this.generateConfigText();
 
     this.isSaving = true;
@@ -981,14 +1061,31 @@ export class ConfigManager implements vscode.Disposable {
       fs.writeFileSync(this.configPath, output, 'utf-8');
       this.hasShownWriteError = false;
       this.writePathIndex();
+      // v0.20.2 (#63) — what we just wrote is now the on-disk truth; reset the
+      // 3-way-merge ancestor so the next save diffs against it.
+      this.lastDiskTerminals = cloneTerminals(this.config.terminals);
     } catch (err) {
       console.error('claudelike-bar: failed to write config', err);
+      // Roll memory back to the pre-merge state — the write didn't land, so the
+      // on-disk file and the baseline are both unchanged. Keep memory in sync
+      // with them so the next save re-runs the merge from a clean state.
+      this.config.terminals = preMergeTerminals;
+      externalAdopted = false;
       if (!this.hasShownWriteError) {
         this.hasShownWriteError = true;
         vscode.window.showErrorMessage(`Claudelike Bar: failed to save config — ${err instanceof Error ? err.message : err}`);
       }
     } finally {
       this.isSavingTimer = setTimeout(() => { this.isSaving = false; this.isSavingTimer = undefined; }, 100);
+    }
+
+    // v0.20.2 (#63) — if the 3-way merge pulled in external edits (an entry
+    // added or deleted by hand since our last sync), the in-memory map just
+    // changed beyond this session's own mutation. Notify so the bar repaints
+    // with the reconciled set instead of waiting for the next event.
+    if (externalAdopted) {
+      this._audioConfigCache = undefined;
+      this.onChangeEmitter.fire();
     }
   }
 

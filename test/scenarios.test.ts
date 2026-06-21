@@ -663,7 +663,10 @@ describe('v0.12 scenario: audio alerts end-to-end', () => {
     }
   });
 
-  it('simultaneous Stops on 3 tiles play one sound (debounce coalesces)', async () => {
+  it('simultaneous Stops on 3 tiles each play a sound (#33 — per-tile, not per-filename)', async () => {
+    // Pre-#33 the debounce keyed on the resolved filename, collapsing three
+    // tiles that share one sound into a single chime — a dropped cue for a
+    // user watching a specific tile. Keyed per-tile, each tile chimes.
     const { tracker, plays, cleanup } = setupAudio(
       { ready: 'chime.mp3' },
       ['a', 'b', 'c'],
@@ -675,7 +678,7 @@ describe('v0.12 scenario: audio alerts end-to-end', () => {
         tracker.updateStatus(n, 'ready', 'Stop');
       }
       await new Promise((r) => setTimeout(r, 80));
-      expect(plays.length).toBe(1);
+      expect(plays.length).toBe(3);
     } finally {
       cleanup();
     }

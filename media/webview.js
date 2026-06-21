@@ -22,6 +22,30 @@ let sortMode = 'auto';
  * `showLastPrompt: true` in claudelike-bar.jsonc. */
 let showLastPrompt = false;
 
+/**
+ * v0.20.2 (#54) — a play message older than this is discarded rather than
+ * played. When VS Code suspends/throttles the webview (Windows background
+ * renderer, collapsed sidebar) postMessage queues; on resume the whole queue
+ * dispatches at once and would burst-replay a pile of stale chimes. A chime is
+ * a notification, not music — a stack of old alerts is worse than missing
+ * them. Messages sent while the webview is live arrive well within the window.
+ */
+const AUDIO_TTL_MS = 3000;
+
+/**
+ * Pure freshness test for an incoming play message. Exposed on globalThis for
+ * unit tests. A message with no `ts` (an older extension build) is always
+ * treated as fresh so audio still works across a version skew.
+ */
+function isChimeFresh(message, now) {
+  if (!message || typeof message.ts !== 'number') return true;
+  return now - message.ts <= AUDIO_TTL_MS;
+}
+// Test-only escape hatch — guard matches the organizer.js pattern.
+if (typeof globalThis !== 'undefined') {
+  globalThis.__isChimeFresh = isChimeFresh;
+}
+
 // Handle messages from extension
 window.addEventListener('message', (event) => {
   const message = event.data;
@@ -44,6 +68,16 @@ window.addEventListener('message', (event) => {
     // CI smoke test can assert autoplay didn't get blocked. Production
     // code ignores the acks.
     const url = message.url;
+    // v0.20.2 (#54) — drop chimes that queued up while the webview was
+    // suspended so they don't burst-play on resume.
+    if (!isChimeFresh(message, Date.now())) {
+      vscode.postMessage({
+        type: 'audioPlayError',
+        url,
+        reason: `stale chime discarded (age ${Date.now() - message.ts}ms)`,
+      });
+      return;
+    }
     try {
       const audio = new Audio(url);
       audio.volume = typeof message.volume === 'number' ? message.volume : 0.6;

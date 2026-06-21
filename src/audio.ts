@@ -22,7 +22,7 @@ import { StateTransition, TransitionListener } from './types';
  *   - chosen slot has no file configured / file missing → drop + warn-once
  *
  * Debounce: rapid repeat transitions on the SAME tile within `debounceMs`
- * coalesce into a single `play`. Keyed on the tile name (#33) — the prior
+ * coalesce into a single `play`. Keyed on the unique tile id (#33) — the prior
  * per-filename key meant two *different* tiles flipping to ready within the
  * window collapsed into one chime, so a user watching a specific tile saw a
  * dropped cue. Per-tile keying lets every tile that finishes get its own
@@ -108,9 +108,12 @@ export class AudioPlayer implements vscode.Disposable {
       return;
     }
 
-    // Key on the tile, not the filename, so concurrent ready transitions on
-    // different tiles each get a chime (#33).
-    this.scheduleDebounced(t.name, chosen, audio.volume, audio.debounceMs);
+    // Key on the unique tile id, not the filename or the display name, so
+    // concurrent ready transitions on different tiles each get a chime (#33).
+    // tileId is guaranteed unique; tile names can collide (two folders with
+    // the same basename, nickname clashes), which would re-introduce the
+    // dropped-cue bug along the name axis.
+    this.scheduleDebounced(String(t.tileId), chosen, audio.volume, audio.debounceMs);
   }
 
   private scheduleDebounced(key: string, filename: string, volume: number, debounceMs: number): void {

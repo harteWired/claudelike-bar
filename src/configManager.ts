@@ -1002,7 +1002,13 @@ export class ConfigManager implements vscode.Disposable {
     // reload that should have caught the deletion didn't fire (Windows
     // debounce, mocked fs in tests). Scalar top-level keys (mode, sortMode,
     // labels, …) still use last-writer-wins — that race is narrow and rare.
+    // Compute the merge into a LOCAL, then commit it to `this.config.terminals`
+    // only around the write — and roll back on a write failure. Mutating the
+    // live map before a write that then throws would leave memory half-applied
+    // and out of sync with the (unchanged) baseline and on-disk file.
     let externalAdopted = false;
+    const preMergeTerminals = this.config.terminals;
+    let merged: Record<string, TerminalConfig> = preMergeTerminals;
     try {
       let diskTerminals: Record<string, TerminalConfig> = {};
       if (fs.existsSync(this.configPath)) {
@@ -1013,8 +1019,8 @@ export class ConfigManager implements vscode.Disposable {
         }
       }
       const baseline = this.lastDiskTerminals;
-      const mem = this.config.terminals;
-      const merged: Record<string, TerminalConfig> = {};
+      const mem = preMergeTerminals;
+      const out: Record<string, TerminalConfig> = {};
       const keys = new Set([
         ...Object.keys(diskTerminals),
         ...Object.keys(mem),
@@ -1027,23 +1033,25 @@ export class ConfigManager implements vscode.Disposable {
         const weAddedOrModified = inMem && (!inBase || !entryEqual(mem[key], baseline[key]));
         const weDeleted = inBase && !inMem;
         if (weAddedOrModified) {
-          merged[key] = mem[key]; // our edit wins on keys we touched
+          out[key] = mem[key]; // our edit wins on keys we touched
         } else if (weDeleted) {
           // honor our deletion — omit
         } else if (inDisk) {
           // we didn't touch it — defer to disk (external edit/addition)
-          merged[key] = diskTerminals[key];
+          out[key] = diskTerminals[key];
           if (!inMem || !entryEqual(diskTerminals[key], mem[key])) externalAdopted = true;
         } else if (inMem) {
           // not on disk, we didn't add it — external deletion; drop it
           externalAdopted = true;
         }
       }
-      this.config.terminals = merged;
+      merged = out;
     } catch {
       // Disk read failed — proceed with in-memory state only.
     }
 
+    // Commit the merge so generateConfigText() serializes the reconciled set.
+    this.config.terminals = merged;
     const output = this.generateConfigText();
 
     this.isSaving = true;
@@ -1058,6 +1066,11 @@ export class ConfigManager implements vscode.Disposable {
       this.lastDiskTerminals = cloneTerminals(this.config.terminals);
     } catch (err) {
       console.error('claudelike-bar: failed to write config', err);
+      // Roll memory back to the pre-merge state — the write didn't land, so the
+      // on-disk file and the baseline are both unchanged. Keep memory in sync
+      // with them so the next save re-runs the merge from a clean state.
+      this.config.terminals = preMergeTerminals;
+      externalAdopted = false;
       if (!this.hasShownWriteError) {
         this.hasShownWriteError = true;
         vscode.window.showErrorMessage(`Claudelike Bar: failed to save config — ${err instanceof Error ? err.message : err}`);

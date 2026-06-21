@@ -41,7 +41,10 @@ function isChimeFresh(message, now) {
   if (!message || typeof message.ts !== 'number') return true;
   return now - message.ts <= AUDIO_TTL_MS;
 }
-globalThis.__isChimeFresh = isChimeFresh;
+// Test-only escape hatch — guard matches the organizer.js pattern.
+if (typeof globalThis !== 'undefined') {
+  globalThis.__isChimeFresh = isChimeFresh;
+}
 
 // Handle messages from extension
 window.addEventListener('message', (event) => {

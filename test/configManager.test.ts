@@ -814,4 +814,25 @@ describe('ConfigManager.save 3-way merge (#63)', () => {
 
     expect(readTerminals().a.color).toBe('red');
   });
+
+  it('a failed write does not lose in-memory entries (rollback) and converges on retry', () => {
+    writeFile({ a: entry() });
+    cm = new ConfigManager(configFile);
+
+    // Force the next write to throw by replacing the config path with a
+    // directory (writeFileSync → EISDIR). Memory must keep the new entry, not
+    // end up half-merged and desynced from the unchanged baseline/disk.
+    fs.rmSync(configFile);
+    fs.mkdirSync(configFile);
+    mutateAndFlush(() => cm.addProjectEntry('b', entry('green') as any));
+    expect(cm.getAll().a).toBeDefined();
+    expect(cm.getAll().b).toBeDefined(); // not lost despite the failed write
+
+    // Restore writability; a subsequent save writes the full reconciled set.
+    fs.rmdirSync(configFile);
+    mutateAndFlush(() => cm.setColor('a', 'red'));
+    const disk = readTerminals();
+    expect(disk.a.color).toBe('red');
+    expect(disk.b.color).toBe('green');
+  });
 });

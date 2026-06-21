@@ -161,6 +161,34 @@ describe('TerminalTracker state machine', () => {
     expect(getTile()?.contextPercent).toBe(75);
   });
 
+  // --- #43: fresh session must not inherit stale context ---
+
+  it('SessionStart(startup) clears carried-over context percent', () => {
+    tracker.updateContext('my-project', 80);
+    expect(getTile()?.contextPercent).toBe(80);
+    tracker.updateStatus('my-project', 'session_start', 'SessionStart', undefined, { source: 'startup' });
+    expect(getTile()?.contextPercent).toBeUndefined();
+  });
+
+  it('SessionStart(startup) ignores a stale context value sent alongside it', () => {
+    tracker.updateContext('my-project', 80);
+    // Old hook still carries context_percent on the SessionStart write.
+    tracker.updateStatus('my-project', 'session_start', 'SessionStart', 80, { source: 'startup' });
+    expect(getTile()?.contextPercent).toBeUndefined();
+  });
+
+  it('SessionEnd clears context percent', () => {
+    tracker.updateContext('my-project', 55);
+    tracker.updateStatus('my-project', 'session_end', 'SessionEnd', undefined, { reason: 'logout' });
+    expect(getTile()?.contextPercent).toBeUndefined();
+  });
+
+  it('SessionStart(resume) does NOT clear context (mid-session bookkeeping)', () => {
+    tracker.updateContext('my-project', 60);
+    tracker.updateStatus('my-project', 'session_start', 'SessionStart', undefined, { source: 'resume' });
+    expect(getTile()?.contextPercent).toBe(60);
+  });
+
   // --- unmatched project ---
 
   it('ignores status updates for unknown projects', () => {

@@ -392,6 +392,19 @@ function main() {
     // No existing file or malformed — write fresh.
   }
 
+  // v0.20.2 (#43) — a genuinely fresh session (SessionStart sourced from
+  // `startup` or `clear`) or a session ending has no meaningful context yet.
+  // `context_percent` is owned by the statusline module and otherwise rides
+  // through the read-merge-write above untouched, so a prior session's value
+  // would persist into the file the extension reads on the next VS Code start
+  // and paint stale "used context" onto a brand-new tile. Drop it on these
+  // events; the statusline writes a fresh number once the new session renders.
+  const isFreshSession = event === 'SessionStart'
+    && (sessionSource === 'startup' || sessionSource === 'clear');
+  if (isFreshSession || event === 'SessionEnd') {
+    delete payload.context_percent;
+  }
+
   // Atomic write via rename — prevents the extension's FileSystemWatcher from
   // seeing partially-written JSON. The hook fires 4+ times per Claude turn,
   // so the race has real exposure. rename() is atomic on POSIX and uses

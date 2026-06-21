@@ -528,6 +528,19 @@ export class TerminalTracker implements vscode.Disposable {
       const prev = tile.status;
       let changed = false;
 
+      // v0.20.2 (#43) — a genuinely fresh session (SessionStart with a
+      // `startup`/`clear` source) or a session ending carries ~no meaningful
+      // context. The hook's read-merge-write preserves `context_percent`
+      // (owned by the statusline module) across every event, so a restart can
+      // surface a *prior* session's context on a brand-new tile. Treat these
+      // events as a context reset and never apply a stale incoming value.
+      // Belt-and-suspenders with the hook, which also drops context_percent on
+      // these events — this side also catches the startup race where the old
+      // status file is read before the new session's SessionStart fires.
+      const ctxResetEvent =
+        (event === 'SessionStart' && (extra?.source === 'startup' || extra?.source === 'clear')) ||
+        event === 'SessionEnd';
+
       // UserPromptSubmit is the universal reset — always goes to working,
       // clears subagent counter and teammate-idle flag.
       if (event === 'UserPromptSubmit') {
@@ -919,7 +932,13 @@ export class TerminalTracker implements vscode.Disposable {
         this.log(() => `no-op ${tile.name}: stayed ${prev} (event=${event ?? '-'}, incoming=${status})`);
       }
       let contextChanged = false;
-      if (contextPercent !== undefined && tile.contextPercent !== contextPercent) {
+      if (ctxResetEvent) {
+        // Fresh session / session end — wipe any carried-over context%.
+        if (tile.contextPercent !== undefined) {
+          tile.contextPercent = undefined;
+          contextChanged = true;
+        }
+      } else if (contextPercent !== undefined && tile.contextPercent !== contextPercent) {
         tile.contextPercent = contextPercent;
         contextChanged = true;
       }

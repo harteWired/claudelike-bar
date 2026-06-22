@@ -9,6 +9,7 @@ node_modules/**
 hooks/*.legacy
 hooks/*.sh
 .git/**
+.claude/**
 *.vsix
 index.html
 package-lock.json

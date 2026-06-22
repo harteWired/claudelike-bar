@@ -92,19 +92,40 @@ fi
 unset OVSX_PAT
 
 # ── VS Code Marketplace ──────────────────────────────────────────────────────
+# IMPORTANT: the Marketplace listing has a DIFFERENT identity than Open VSX/git.
+# The live listing is `harteWired.claudelikebar` (NO hyphen) with displayName
+# "Claudelike-Bar" (hyphen). The galleries diverged during the aes87→harteWired
+# rebrand: Open VSX kept `claudelike-bar` (hyphen), Marketplace took the
+# no-hyphen `claudelikebar`. Publishing the git identity (`claudelike-bar` /
+# "Claudelike Bar") to the Marketplace fails on its global name + displayName
+# uniqueness ("extension/display name already exists"). So we repackage a
+# Marketplace-only VSIX with the listing's exact identity, then restore.
+MKT_PUB="harteWired"; MKT_NAME="claudelikebar"; MKT_DISPLAY="Claudelike-Bar"
 MKT_DONE=skipped
 if [ "$DO_MARKETPLACE" -eq 1 ]; then
-  say "Publish → VS Code Marketplace"
+  say "Publish → VS Code Marketplace (as $MKT_PUB.$MKT_NAME)"
   VSCE_PAT="$(secret azure AZURE_DEVOPS_PAT)"; export VSCE_PAT
   if [ -z "$VSCE_PAT" ]; then
     warn "AZURE_DEVOPS_PAT empty — skipping Marketplace"
     MKT_DONE=no-token
-  elif npx --no-install vsce publish --packagePath "$VSIX"; then
-    ok "Marketplace: published $VERSION"
-    MKT_DONE=1
   else
-    warn "Marketplace publish failed (listing may be unpublished / PAT scope) — continuing"
-    MKT_DONE=0
+    MKT_VSIX="/tmp/${MKT_NAME}-${VERSION}-mkt.vsix"
+    PKG_BAK="$(mktemp)"; cp package.json "$PKG_BAK"
+    # restore the git identity (+ rebuild dist) no matter how this block exits
+    restore_pkg() { cp "$PKG_BAK" package.json; npm run build >/dev/null 2>&1 || true; rm -f "$PKG_BAK"; }
+    node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.name='$MKT_NAME';p.publisher='$MKT_PUB';p.displayName='$MKT_DISPLAY';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n')"
+    if npm run build >/dev/null 2>&1 && npx --no-install vsce package -o "$MKT_VSIX" >/dev/null 2>&1; then
+      restore_pkg   # restore git identity before publishing (publish reads the packaged VSIX, not package.json)
+      if npx --no-install vsce publish --packagePath "$MKT_VSIX"; then
+        ok "Marketplace: published $VERSION"; MKT_DONE=1
+      else
+        warn "Marketplace publish failed (PAT scope / name dispute) — continuing"; MKT_DONE=0
+      fi
+      rm -f "$MKT_VSIX"
+    else
+      restore_pkg
+      warn "Marketplace repackage failed — continuing"; MKT_DONE=0
+    fi
   fi
   unset VSCE_PAT
 fi

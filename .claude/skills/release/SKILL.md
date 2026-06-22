@@ -49,10 +49,25 @@ never argv, never echoed:
 | VS Code Marketplace | `azure` / `AZURE_DEVOPS_PAT`  |
 | GitHub release    | `github` / `GITHUB_PAT`        |
 
-Publisher id is `harteWired`; the Open VSX namespace already exists (first
-published at v0.7.6). If the Marketplace listing was unpublished, `vsce publish`
-re-lists it — if it fails on PAT scope or a missing publisher, the script reports
-it and continues (Open VSX + tag still land).
+### Gallery identity split (important)
+
+The two galleries use **different extension identities** — a legacy of the
+`aes87 → harteWired` rebrand, and the reason a naive `vsce publish` fails:
+
+| Gallery | id | name | displayName |
+|---------|----|------|-------------|
+| Open VSX (+ git) | `harteWired.claudelike-bar` | `claudelike-bar` (hyphen) | `Claudelike Bar` (space) |
+| VS Code Marketplace | `harteWired.claudelikebar` | `claudelikebar` (no hyphen) | `Claudelike-Bar` (hyphen) |
+
+`package.json` holds the Open VSX/git identity. The script **repackages a
+Marketplace-only VSIX** with the no-hyphen name + hyphenated displayName, then
+publishes that and restores `package.json`. Publishing the git identity to the
+Marketplace fails on its global name/displayName uniqueness ("extension/display
+name already exists"). The old `aes87.claudelike-bar` listing no longer exists —
+MS declined the name transfer, so `harteWired.claudelikebar` is the canonical
+Marketplace listing. The Azure PAT controls both `aes87` and `harteWired`.
+If the Marketplace identity ever changes, edit `MKT_PUB/MKT_NAME/MKT_DISPLAY`
+at the top of the Marketplace block in `release.sh`.
 
 ## To release a NEW version (not just re-publish current)
 
